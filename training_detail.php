@@ -274,9 +274,97 @@ function previewAddPhoto(input) {
 <?php endif; ?>
 
 <style>
+/* ═══════════════════════════════════════════════════════════
+   TISK – Training detail
+   Cíl: všechny série na 1–2 stránky A4, moderní kompaktní vzhled
+═══════════════════════════════════════════════════════════ */
 @media print {
-    .navbar, .btn, footer { display: none !important; }
-    .card { break-inside: avoid; }
+
+    /* ── Skryté prvky ── */
+    .navbar, footer, .btn, .training-detail-actions,
+    .card-foto-actions, form[action*="photo_update"],
+    #add-photo-preview, .training-finish-btn,
+    .alert, script { display: none !important; }
+
+    /* ── Základní stránka ── */
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body  { font-size: 9pt; font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #fff; margin: 0; }
+    .container, .container-fluid { max-width: 100% !important; padding: 0 !important; }
+
+    /* ── Hlavička tréninku ── */
+    .page-header {
+        display: flex !important;
+        align-items: center;
+        gap: 8px;
+        border-bottom: 2px solid #f59e0b;
+        padding-bottom: 6px;
+        margin-bottom: 10px !important;
+    }
+    .page-header h2 { font-size: 13pt !important; margin: 0; }
+    .page-header .badge { font-size: 8pt !important; padding: 2px 6px; }
+    .page-header .text-muted { font-size: 8pt; }
+
+    /* ── Souhrn (3 karty) ── */
+    .row.g-3.mb-4 { display: flex !important; gap: 0 !important; margin-bottom: 8px !important; }
+    .row.g-3.mb-4 .col-sm-4 { flex: 1; padding: 0 4px; }
+    .row.g-3.mb-4 .card {
+        border: 1px solid #e5e7eb !important;
+        box-shadow: none !important;
+        padding: 4px 0 !important;
+        border-radius: 6px;
+    }
+    .row.g-3.mb-4 .display-6 { font-size: 14pt !important; }
+    .row.g-3.mb-4 .text-muted  { font-size: 7pt; }
+
+    /* ── Karty cviků ── */
+    .exercise-block {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+        border-radius: 6px !important;
+        margin-bottom: 6px !important;
+        break-inside: avoid;
+    }
+    .exercise-block .card-header {
+        background: #1e2937 !important;
+        color: #fff !important;
+        padding: 4px 10px !important;
+        font-size: 9pt;
+        display: flex !important;
+        align-items: center;
+        border-radius: 6px 6px 0 0 !important;
+    }
+    .exercise-block .card-header .badge {
+        background: #f59e0b !important;
+        color: #111 !important;
+        font-size: 9pt;
+        margin-right: 6px;
+        padding: 2px 6px;
+    }
+    .exercise-block .card-header .ms-auto { font-size: 7.5pt; color: #ccc !important; }
+    .exercise-block .card-header strong { color: #fbbf24 !important; }
+
+    /* ── Tabulky sérií ── */
+    .table { font-size: 8pt !important; margin: 0 !important; }
+    .table th, .table td { padding: 3px 6px !important; border-color: #dee2e6 !important; }
+    .table-striped tbody tr:nth-child(odd) td { background: #f9fafb !important; }
+    .table-dark td { background: #1e2937 !important; color: #fff !important; font-size: 7.5pt !important; }
+
+    /* ── Poznámka ── */
+    .card.border-0.shadow-sm:not(.exercise-block) {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+        border-radius: 6px !important;
+        margin-bottom: 6px !important;
+    }
+    .card-header.bg-dark { background: #1e2937 !important; color: #fff !important; padding: 4px 10px !important; font-size: 8.5pt; }
+    .card-body { padding: 6px 10px !important; }
+
+    /* ── Fotografie ── */
+    #training-photo { break-inside: avoid; }
+    #training-photo img { max-height: 220px !important; width: auto; }
+
+    /* ── Zápatí stránky ── */
+    @page { margin: 12mm 10mm; size: A4 portrait; }
 }
 </style>
 

@@ -80,6 +80,11 @@ renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name
         <i class="fas fa-chart-line me-2 text-warning"></i>
         <?= h($athlete['first_name'] . ' ' . $athlete['last_name']) ?> – Pokrok
     </h2>
+    <?php if (!empty($chartData)): ?>
+    <button onclick="window.print()" class="btn btn-outline-secondary btn-sm ms-auto">
+        <i class="fas fa-print me-1"></i>Tisk / PDF
+    </button>
+    <?php endif; ?>
 </div>
 
 <?php if (empty($exercises)): ?>
@@ -287,15 +292,241 @@ new Chart(document.getElementById('volumeChart'), {
 });
 </script>
 
+<?php
+// \u2500\u2500 Print-only bloky: SVG grafy generované PHP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+$svgWeight = buildPrintSvg($chartData, 'max_weight', 'kg', '#f59e0b');
+$svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
+?>
+<div class="print-only-section d-none">
+    <!-- Hlavi\u010dka pro tisk -->
+    <div class="print-header">
+        <div class="print-header-left">
+            <span class="print-logo">&#x1F4AA; TrainerApp</span>
+        </div>
+        <div class="print-header-right">
+            Vytisknuto: <?= date('d.m.Y H:i') ?>
+        </div>
+    </div>
+
+    <h1 class="print-title">
+        <?= h($athlete['first_name'] . ' ' . $athlete['last_name']) ?> &ndash; Pokrok
+    </h1>
+    <p class="print-subtitle">Cvik: <strong><?= h($selectedExName) ?></strong></p>
+
+    <!-- Statistika v jednom \u0159\u00e1dku -->
+    <div class="print-stats">
+        <div class="print-stat">
+            <div class="print-stat-value"><?= number_format($maxEver, 1, ',', '') ?> kg</div>
+            <div class="print-stat-label">Rekord v\u00e1ha</div>
+        </div>
+        <div class="print-stat">
+            <div class="print-stat-value"><?= max(array_column($chartData, 'max_reps')) ?></div>
+            <div class="print-stat-label">Max opakov\u00e1n\u00ed</div>
+        </div>
+        <div class="print-stat <?= $improvement >= 0 ? 'positive' : 'negative' ?>">
+            <div class="print-stat-value"><?= ($improvement >= 0 ? '+' : '') . $improvement ?>&nbsp;%</div>
+            <div class="print-stat-label">Zlep\u0161en\u00ed</div>
+        </div>
+        <div class="print-stat">
+            <div class="print-stat-value"><?= count($chartData) ?></div>
+            <div class="print-stat-label">Tr\u00e9nink\u016f s cvikem</div>
+        </div>
+    </div>
+
+    <!-- SVG: Max v\u00e1ha -->
+    <div class="print-chart-block">
+        <div class="print-chart-title">&#x1F4C8; Maxim\u00e1ln\u00ed v\u00e1ha (kg)</div>
+        <?= $svgWeight ?>
+    </div>
+
+    <!-- SVG: Objem -->
+    <div class="print-chart-block">
+        <div class="print-chart-title">&#x1F4CA; Celkov\u00fd objem na tr\u00e9nink (kg&times;opak.)</div>
+        <?= $svgVolume ?>
+    </div>
+
+    <!-- Tabulka -->
+    <div class="print-chart-block">
+        <div class="print-chart-title">&#x1F4CB; Detailn\u00ed data</div>
+        <table class="print-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Datum</th>
+                    <th>Sada</th>
+                    <th>Max v\u00e1ha (kg)</th>
+                    <th>Max opak.</th>
+                    <th>S\u00e9ri\u00ed</th>
+                    <th>Objem</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach (array_reverse($chartData) as $i => $row): ?>
+                <tr>
+                    <td><?= count($chartData) - $i ?></td>
+                    <td><?= formatDate($row['session_date']) ?></td>
+                    <td><?= h($row['set_name']) ?></td>
+                    <td><strong><?= number_format($row['max_weight'], 1, ',', '') ?></strong></td>
+                    <td><?= $row['max_reps'] ?></td>
+                    <td><?= $row['series_count'] ?></td>
+                    <td><?= number_format($row['total_volume'], 0, ',', '') ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <?php else: ?>
 <div class="alert alert-info">Pro tento cvik zatím nejsou žádná data.</div>
 <?php endif; ?>
 <?php endif; ?>
 
+<style>
+/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+   TISK \u2013 Grafy (screen: skryje print-only; print: skryje screen, uka\u017ee SVG)
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+@media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { margin: 10mm 10mm; size: A4 portrait; }
+
+    /* Skryje b\u011b\u017en\u00e9 p\u0159\u00edm\u00e9 prvky str\u00e1nky */
+    .navbar, footer, .btn, .card, canvas,
+    .row.g-3, .alert, h2, .d-flex.align-items-center.mb-4,
+    script { display: none !important; }
+
+    /* Zobraz\u00ed print sekci */
+    .print-only-section {
+        display: block !important;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 9pt;
+        color: #111;
+    }
+
+    /* Hlavi\u010dka */
+    .print-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #f59e0b;
+        padding-bottom: 4px;
+        margin-bottom: 10px;
+        font-size: 7.5pt;
+        color: #6b7280;
+    }
+    .print-logo { font-weight: 700; font-size: 10pt; color: #111; }
+
+    .print-title {
+        font-size: 14pt;
+        font-weight: 700;
+        margin: 0 0 2px;
+    }
+    .print-subtitle { font-size: 9pt; color: #374151; margin: 0 0 10px; }
+
+    /* Statistiky */
+    .print-stats {
+        display: flex;
+        gap: 0;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+    .print-stat {
+        flex: 1;
+        text-align: center;
+        padding: 6px 4px;
+        border-right: 1px solid #e5e7eb;
+    }
+    .print-stat:last-child { border-right: none; }
+    .print-stat-value { font-size: 15pt; font-weight: 700; color: #f59e0b; line-height: 1.1; }
+    .print-stat.positive .print-stat-value { color: #16a34a; }
+    .print-stat.negative .print-stat-value { color: #dc2626; }
+    .print-stat-label { font-size: 7pt; color: #6b7280; margin-top: 1px; }
+
+    /* Grafy */
+    .print-chart-block { margin-bottom: 10px; break-inside: avoid; }
+    .print-chart-title {
+        font-size: 8.5pt;
+        font-weight: 700;
+        background: #1e2937;
+        color: #fff;
+        padding: 3px 8px;
+        border-radius: 4px 4px 0 0;
+        margin-bottom: 2px;
+    }
+    .print-chart-block svg { display: block; }
+
+    /* Tabulka */
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8pt;
+    }
+    .print-table th {
+        background: #f3f4f6 !important;
+        font-weight: 600;
+        padding: 3px 6px;
+        border: 1px solid #dee2e6;
+        text-align: center;
+    }
+    .print-table td {
+        padding: 2px 6px;
+        border: 1px solid #dee2e6;
+        text-align: center;
+    }
+    .print-table tbody tr:nth-child(odd) td { background: #f9fafb !important; }
+}
+</style>
+
 <?php
 // Pomocná funkce pro JS – není potřeba v PHP, jen pro formátování JS data
 function formatDateJS(string $dt): string {
     return date('d.m.Y', strtotime($dt));
+}
+
+// \u2500\u2500 PHP: SVG sloupcový graf pro tisk \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function buildPrintSvg(array $data, string $metric, string $unit, string $color): string {
+    if (empty($data)) return '';
+    $vals   = array_map(fn($r) => (float)$r[$metric], $data);
+    $labels = array_map(fn($r) => date('d.m', strtotime($r['session_date'])), $data);
+    $maxVal = max($vals) ?: 1;
+    $n      = count($vals);
+    $W      = 680; $H = 140; $padL = 40; $padB = 28; $padT = 10; $padR = 10;
+    $chartW = $W - $padL - $padR;
+    $chartH = $H - $padB - $padT;
+    $barW   = max(4, (int)floor($chartW / $n * 0.6));
+    $gap    = $chartW / $n;
+
+    $svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {$W} {$H}' width='{$W}' height='{$H}' style='max-width:100%'>";
+    // Mřížka
+    for ($i = 0; $i <= 4; $i++) {
+        $y = $padT + $chartH - (int)round($chartH * $i / 4);
+        $lbl = number_format($maxVal * $i / 4, 1, ',', '');
+        $svg .= "<line x1='{$padL}' y1='{$y}' x2='".($W-$padR)."' y2='{$y}' stroke='#e5e7eb' stroke-width='1'/>";
+        $svg .= "<text x='".($padL-3)."' y='".($y+3)."' text-anchor='end' font-size='7' fill='#6b7280'>{$lbl}</text>";
+    }
+    // Sloupce + popisky
+    foreach ($vals as $idx => $v) {
+        $bh  = (int)round($chartH * $v / $maxVal);
+        $bx  = (int)round($padL + $gap * $idx + ($gap - $barW) / 2);
+        $by  = $padT + $chartH - $bh;
+        $lx  = (int)round($padL + $gap * ($idx + 0.5));
+        $ly  = $H - $padB + 10;
+        $svg .= "<rect x='{$bx}' y='{$by}' width='{$barW}' height='{$bh}' fill='{$color}' rx='2'/>";
+        // Hodnota nad sloupcem
+        if ($bh > 12) {
+            $vy = $by + 9;
+            $vStr = number_format($v, ($unit === 'kg') ? 1 : 0, ',', '');
+            $svg .= "<text x='".($bx + $barW/2)."' y='{$vy}' text-anchor='middle' font-size='6.5' fill='#111' font-weight='bold'>{$vStr}</text>";
+        }
+        $svg .= "<text x='{$lx}' y='{$ly}' text-anchor='middle' font-size='6.5' fill='#374151'>{$labels[$idx]}</text>";
+    }
+    // Osa Y
+    $svg .= "<line x1='{$padL}' y1='{$padT}' x2='{$padL}' y2='".($padT+$chartH)."' stroke='#9ca3af' stroke-width='1'/>";
+    $svg .= "<line x1='{$padL}' y1='".($padT+$chartH)."' x2='".($W-$padR)."' y2='".($padT+$chartH)."' stroke='#9ca3af' stroke-width='1'/>";
+    $svg .= '</svg>';
+    return $svg;
 }
 ?>
 
