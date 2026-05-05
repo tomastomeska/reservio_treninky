@@ -168,6 +168,19 @@ function resizeAndSavePhoto(string $inputName, string $subDir, int $maxDim = 192
         return $filename;
     }
 
+    // Oprav orientaci dle EXIF (fotky z mobilů jsou často "na šířku" se EXIF rotací)
+    if ($mime === 'image/jpeg' && function_exists('exif_read_data')) {
+        $exif        = @exif_read_data($file['tmp_name']);
+        $orientation = (int)($exif['Orientation'] ?? 1);
+        if ($orientation > 1) {
+            $corrected = _applyExifOrientation($src, $orientation);
+            if ($corrected !== $src) {
+                imagedestroy($src);
+                $src = $corrected;
+            }
+        }
+    }
+
     $origW = imagesx($src);
     $origH = imagesy($src);
 
@@ -211,6 +224,37 @@ function resizeAndSavePhoto(string $inputName, string $subDir, int $maxDim = 192
     imagedestroy($dst);
 
     return $saved ? $filename : null;
+}
+
+/**
+ * Opraví orientaci GD obrazu dle EXIF orientation tagu (1–8).
+ * Vrátí nový nebo původní resource.
+ */
+function _applyExifOrientation($img, int $orientation) {
+    switch ($orientation) {
+        case 2:
+            imageflip($img, IMG_FLIP_HORIZONTAL);
+            return $img;
+        case 3:
+            return imagerotate($img, 180, 0);
+        case 4:
+            imageflip($img, IMG_FLIP_VERTICAL);
+            return $img;
+        case 5:
+            $img = imagerotate($img, -90, 0);
+            imageflip($img, IMG_FLIP_HORIZONTAL);
+            return $img;
+        case 6:
+            return imagerotate($img, -90, 0);
+        case 7:
+            $img = imagerotate($img, 90, 0);
+            imageflip($img, IMG_FLIP_HORIZONTAL);
+            return $img;
+        case 8:
+            return imagerotate($img, 90, 0);
+        default:
+            return $img;
+    }
 }
 
 /**

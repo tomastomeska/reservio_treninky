@@ -232,11 +232,16 @@ renderHeader('Detail tréninku');
             <input type="hidden" name="session_id" value="<?= $sessionId ?>">
             <input type="hidden" name="action" value="update">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <input type="file" name="training_photo" class="form-control" style="max-width:320px;"
+                <input type="file" name="training_photo" id="addPhotoInput"
                        accept="image/*" capture="environment"
+                       class="d-none"
                        onchange="previewAddPhoto(this)">
+                <label for="addPhotoInput" class="btn btn-outline-warning mb-0">
+                    <i class="fas fa-camera me-1"></i>Nahrát / Vyfotit
+                </label>
+                <span id="addPhotoName" class="text-muted small fst-italic">Soubor nevybrán</span>
                 <button type="submit" class="btn btn-outline-success">
-                    <i class="fas fa-upload me-1"></i>Přidat fotografii
+                    <i class="fas fa-save me-1"></i>Uložit fotografii
                 </button>
             </div>
             <img id="add-photo-preview" class="img-fluid rounded border mt-3 d-none"
@@ -246,11 +251,24 @@ renderHeader('Detail tréninku');
 </div>
 <script>
 function previewAddPhoto(input) {
-    const preview = document.getElementById('add-photo-preview');
-    if (!preview || !input.files || !input.files[0]) return;
+    const preview  = document.getElementById('add-photo-preview');
+    const nameSpan = document.getElementById('addPhotoName');
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (nameSpan) nameSpan.textContent = file.name;
+    if (!preview) return;
+
+    // HEIC a jiné formáty nepodporované prohlížečem nelze zobrazit jako náhled
+    const previewable = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!previewable.includes(file.type.toLowerCase())) {
+        preview.classList.add('d-none');
+        preview.removeAttribute('src');
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = e => { preview.src = e.target.result; preview.classList.remove('d-none'); };
-    reader.readAsDataURL(input.files[0]);
+    reader.readAsDataURL(file);
 }
 </script>
 <?php endif; ?>

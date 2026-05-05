@@ -337,6 +337,14 @@ function previewTrainingPhoto(input) {
         return;
     }
 
+    // HEIC a jiné formáty nepodporované prohlížečem nelze zobrazit jako náhled
+    const previewable = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!previewable.includes(file.type.toLowerCase())) {
+        preview.classList.add('d-none');
+        preview.removeAttribute('src');
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         preview.src = e.target.result;
