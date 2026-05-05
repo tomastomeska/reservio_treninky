@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // api/save_series.php – AJAX endpoint pro uložení série
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
