@@ -274,97 +274,157 @@ function previewAddPhoto(input) {
 <?php endif; ?>
 
 <style>
-/* ═══════════════════════════════════════════════════════════
-   TISK – Training detail
-   Cíl: všechny série na 1–2 stránky A4, moderní kompaktní vzhled
-═══════════════════════════════════════════════════════════ */
 @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+    @page { margin: 12mm 10mm; size: A4 portrait; }
 
-    /* ── Skryté prvky ── */
+    /* Zaklad */
+    html, body { font-size: 8.5pt; font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #fff; margin: 0; }
+    .container, .container-fluid { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+
+    /* Skryte prvky */
     .navbar, footer, .btn, .training-detail-actions,
-    .card-foto-actions, form[action*="photo_update"],
-    #add-photo-preview, .training-finish-btn,
-    .alert, script { display: none !important; }
+    form[action*="photo_update"], label[for="addPhotoInput"],
+    #add-photo-preview, #addPhotoName, .training-finish-btn,
+    .alert { display: none !important; }
 
-    /* ── Základní stránka ── */
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body  { font-size: 9pt; font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #fff; margin: 0; }
-    .container, .container-fluid { max-width: 100% !important; padding: 0 !important; }
-
-    /* ── Hlavička tréninku ── */
+    /* Hlavicka stranky - kompaktni jeden radek */
     .page-header {
         display: flex !important;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 2px solid #f59e0b;
-        padding-bottom: 6px;
-        margin-bottom: 10px !important;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 6px;
+        border-bottom: 2.5px solid #f59e0b;
+        padding-bottom: 5px;
+        margin-bottom: 8px !important;
     }
-    .page-header h2 { font-size: 13pt !important; margin: 0; }
-    .page-header .badge { font-size: 8pt !important; padding: 2px 6px; }
-    .page-header .text-muted { font-size: 8pt; }
+    .page-header h2 {
+        font-size: 12pt !important;
+        margin: 0;
+        flex: none;
+    }
+    .page-header h2 i { display: none; }
+    .page-header .badge {
+        font-size: 7.5pt !important;
+        padding: 1px 5px;
+        border: 1px solid #f59e0b;
+        color: #92400e !important;
+        background: #fef3c7 !important;
+        border-radius: 4px;
+    }
+    .page-header .text-muted { font-size: 7.5pt; }
+    .page-header .ms-auto { display: none !important; }
 
-    /* ── Souhrn (3 karty) ── */
-    .row.g-3.mb-4 { display: flex !important; gap: 0 !important; margin-bottom: 8px !important; }
-    .row.g-3.mb-4 .col-sm-4 { flex: 1; padding: 0 4px; }
-    .row.g-3.mb-4 .card {
-        border: 1px solid #e5e7eb !important;
-        box-shadow: none !important;
-        padding: 4px 0 !important;
+    /* Souhrn: 3 boxy v jednom radku bez karet */
+    .row.g-3.mb-4 {
+        display: flex !important;
+        gap: 0 !important;
+        margin-bottom: 8px !important;
+        border: 1px solid #e5e7eb;
         border-radius: 6px;
+        overflow: hidden;
     }
-    .row.g-3.mb-4 .display-6 { font-size: 14pt !important; }
-    .row.g-3.mb-4 .text-muted  { font-size: 7pt; }
+    .row.g-3.mb-4 .col-sm-4 { flex: 1; padding: 0 !important; }
+    .row.g-3.mb-4 .card {
+        border: none !important;
+        border-right: 1px solid #e5e7eb !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 5px 0 !important;
+        margin: 0 !important;
+    }
+    .row.g-3.mb-4 .col-sm-4:last-child .card { border-right: none !important; }
+    .row.g-3.mb-4 .display-6 { font-size: 13pt !important; margin: 0; line-height: 1.2; }
+    .row.g-3.mb-4 .text-muted { font-size: 7pt; }
+    .row.g-3.mb-4 .py-3 { padding: 4px 0 !important; }
 
-    /* ── Karty cviků ── */
+    /* Cviky - ultra kompaktni */
     .exercise-block {
         border: 1px solid #dee2e6 !important;
         box-shadow: none !important;
-        border-radius: 6px !important;
-        margin-bottom: 6px !important;
+        border-radius: 4px !important;
+        margin-bottom: 5px !important;
         break-inside: avoid;
+        page-break-inside: avoid;
     }
     .exercise-block .card-header {
         background: #1e2937 !important;
         color: #fff !important;
-        padding: 4px 10px !important;
-        font-size: 9pt;
+        padding: 3px 8px !important;
+        font-size: 8.5pt;
         display: flex !important;
         align-items: center;
-        border-radius: 6px 6px 0 0 !important;
+        border-radius: 4px 4px 0 0 !important;
+        line-height: 1.3;
     }
     .exercise-block .card-header .badge {
         background: #f59e0b !important;
         color: #111 !important;
-        font-size: 9pt;
-        margin-right: 6px;
-        padding: 2px 6px;
+        font-size: 8pt;
+        margin-right: 5px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        flex: none;
     }
-    .exercise-block .card-header .ms-auto { font-size: 7.5pt; color: #ccc !important; }
-    .exercise-block .card-header strong { color: #fbbf24 !important; }
+    .exercise-block .card-header .fw-bold { font-size: 8.5pt; }
+    .exercise-block .card-header .ms-auto {
+        font-size: 7pt;
+        color: #aaa !important;
+        white-space: nowrap;
+    }
+    .exercise-block .card-header .text-warning { color: #fbbf24 !important; }
+    .exercise-block .card-header .fs-5 { font-size: 8.5pt !important; }
 
-    /* ── Tabulky sérií ── */
-    .table { font-size: 8pt !important; margin: 0 !important; }
-    .table th, .table td { padding: 3px 6px !important; border-color: #dee2e6 !important; }
+    /* Tabulky serií - maximalne husté */
+    .table-responsive { overflow: visible !important; }
+    .table { font-size: 7.5pt !important; margin: 0 !important; width: 100% !important; }
+    .table thead th {
+        background: #f3f4f6 !important;
+        font-size: 7pt !important;
+        font-weight: 700;
+        padding: 2px 6px !important;
+        border-color: #dee2e6 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: #374151;
+    }
+    .table tbody td { padding: 2px 6px !important; border-color: #e5e7eb !important; }
     .table-striped tbody tr:nth-child(odd) td { background: #f9fafb !important; }
-    .table-dark td { background: #1e2937 !important; color: #fff !important; font-size: 7.5pt !important; }
+    .table tfoot td {
+        background: #1e2937 !important;
+        color: #fff !important;
+        font-size: 7pt !important;
+        padding: 2px 6px !important;
+        border-color: #374151 !important;
+    }
+    .badge.bg-warning { background: #fef3c7 !important; color: #92400e !important; border: 1px solid #f59e0b; font-size: 7pt; padding: 0 4px; }
 
-    /* ── Poznámka ── */
+    /* Karta Poznamka */
     .card.border-0.shadow-sm:not(.exercise-block) {
         border: 1px solid #dee2e6 !important;
         box-shadow: none !important;
-        border-radius: 6px !important;
-        margin-bottom: 6px !important;
+        border-radius: 4px !important;
+        margin-bottom: 5px !important;
+        break-inside: avoid;
     }
-    .card-header.bg-dark { background: #1e2937 !important; color: #fff !important; padding: 4px 10px !important; font-size: 8.5pt; }
-    .card-body { padding: 6px 10px !important; }
+    .card-header.bg-dark {
+        background: #1e2937 !important;
+        color: #fff !important;
+        padding: 3px 8px !important;
+        font-size: 8pt;
+        border-radius: 4px 4px 0 0 !important;
+    }
+    .card-body { padding: 5px 8px !important; }
 
-    /* ── Fotografie ── */
+    /* Fotografie */
     #training-photo { break-inside: avoid; }
-    #training-photo img { max-height: 220px !important; width: auto; }
+    #training-photo .card-header { border-radius: 4px 4px 0 0 !important; }
+    #training-photo .card-header .ms-auto { display: none !important; }
+    #training-photo img { max-height: 200px !important; width: auto; }
 
-    /* ── Zápatí stránky ── */
-    @page { margin: 12mm 10mm; size: A4 portrait; }
+    /* Skryt "bez fotografie" blok */
+    .card.border-0.shadow-sm.mb-4:not(.exercise-block):not(#training-photo) .form-control,
+    .card.border-0.shadow-sm.mb-4:not(.exercise-block):not(#training-photo) .btn { display: none !important; }
 }
 </style>
 

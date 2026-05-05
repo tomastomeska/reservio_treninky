@@ -293,12 +293,10 @@ new Chart(document.getElementById('volumeChart'), {
 </script>
 
 <?php
-// \u2500\u2500 Print-only bloky: SVG grafy generované PHP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 $svgWeight = buildPrintSvg($chartData, 'max_weight', 'kg', '#f59e0b');
 $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
 ?>
 <div class="print-only-section d-none">
-    <!-- Hlavi\u010dka pro tisk -->
     <div class="print-header">
         <div class="print-header-left">
             <span class="print-logo">&#x1F4AA; TrainerApp</span>
@@ -313,50 +311,46 @@ $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
     </h1>
     <p class="print-subtitle">Cvik: <strong><?= h($selectedExName) ?></strong></p>
 
-    <!-- Statistika v jednom \u0159\u00e1dku -->
     <div class="print-stats">
         <div class="print-stat">
             <div class="print-stat-value"><?= number_format($maxEver, 1, ',', '') ?> kg</div>
-            <div class="print-stat-label">Rekord v\u00e1ha</div>
+            <div class="print-stat-label">Rekord váha</div>
         </div>
         <div class="print-stat">
             <div class="print-stat-value"><?= max(array_column($chartData, 'max_reps')) ?></div>
-            <div class="print-stat-label">Max opakov\u00e1n\u00ed</div>
+            <div class="print-stat-label">Max opakování</div>
         </div>
         <div class="print-stat <?= $improvement >= 0 ? 'positive' : 'negative' ?>">
             <div class="print-stat-value"><?= ($improvement >= 0 ? '+' : '') . $improvement ?>&nbsp;%</div>
-            <div class="print-stat-label">Zlep\u0161en\u00ed</div>
+            <div class="print-stat-label">Zlepšení</div>
         </div>
         <div class="print-stat">
             <div class="print-stat-value"><?= count($chartData) ?></div>
-            <div class="print-stat-label">Tr\u00e9nink\u016f s cvikem</div>
+            <div class="print-stat-label">Tréninků s cvikem</div>
         </div>
     </div>
 
-    <!-- SVG: Max v\u00e1ha -->
     <div class="print-chart-block">
-        <div class="print-chart-title">&#x1F4C8; Maxim\u00e1ln\u00ed v\u00e1ha (kg)</div>
+        <div class="print-chart-title">Max. váha &ndash; <?= h($selectedExName) ?> (kg)</div>
         <?= $svgWeight ?>
     </div>
 
-    <!-- SVG: Objem -->
     <div class="print-chart-block">
-        <div class="print-chart-title">&#x1F4CA; Celkov\u00fd objem na tr\u00e9nink (kg&times;opak.)</div>
+        <div class="print-chart-title">Celkový objem &ndash; <?= h($selectedExName) ?> (kg&times;opak.)</div>
         <?= $svgVolume ?>
     </div>
 
-    <!-- Tabulka -->
     <div class="print-chart-block">
-        <div class="print-chart-title">&#x1F4CB; Detailn\u00ed data</div>
+        <div class="print-chart-title">Detailní data</div>
         <table class="print-table">
             <thead>
                 <tr>
                     <th>#</th>
                     <th>Datum</th>
                     <th>Sada</th>
-                    <th>Max v\u00e1ha (kg)</th>
+                    <th>Max váha (kg)</th>
                     <th>Max opak.</th>
-                    <th>S\u00e9ri\u00ed</th>
+                    <th>Sérií</th>
                     <th>Objem</th>
                 </tr>
             </thead>
@@ -383,19 +377,18 @@ $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
 <?php endif; ?>
 
 <style>
-/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-   TISK \u2013 Grafy (screen: skryje print-only; print: skryje screen, uka\u017ee SVG)
-\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
 @media print {
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { margin: 10mm 10mm; size: A4 portrait; }
 
-    /* Skryje b\u011b\u017en\u00e9 p\u0159\u00edm\u00e9 prvky str\u00e1nky */
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt; color: #111; background: #fff; }
+    .container, .container-fluid { max-width: 100% !important; padding: 0 !important; }
+
+    /* Skryje vse krome print sekce */
     .navbar, footer, .btn, .card, canvas,
     .row.g-3, .alert, h2, .d-flex.align-items-center.mb-4,
-    script { display: none !important; }
+    select, form, script { display: none !important; }
 
-    /* Zobraz\u00ed print sekci */
     .print-only-section {
         display: block !important;
         font-family: 'Segoe UI', Arial, sans-serif;
@@ -403,9 +396,8 @@ $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
         color: #111;
     }
 
-    /* Hlavi\u010dka */
     .print-header {
-        display: flex;
+        display: flex !important;
         justify-content: space-between;
         align-items: center;
         border-bottom: 2px solid #f59e0b;
@@ -416,65 +408,43 @@ $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
     }
     .print-logo { font-weight: 700; font-size: 10pt; color: #111; }
 
-    .print-title {
-        font-size: 14pt;
-        font-weight: 700;
-        margin: 0 0 2px;
-    }
+    .print-title { font-size: 14pt; font-weight: 700; margin: 0 0 2px; }
     .print-subtitle { font-size: 9pt; color: #374151; margin: 0 0 10px; }
 
-    /* Statistiky */
     .print-stats {
-        display: flex;
-        gap: 0;
+        display: flex !important;
         border: 1px solid #e5e7eb;
         border-radius: 6px;
         overflow: hidden;
         margin-bottom: 12px;
     }
-    .print-stat {
-        flex: 1;
-        text-align: center;
-        padding: 6px 4px;
-        border-right: 1px solid #e5e7eb;
-    }
+    .print-stat { flex: 1; text-align: center; padding: 6px 4px; border-right: 1px solid #e5e7eb; }
     .print-stat:last-child { border-right: none; }
     .print-stat-value { font-size: 15pt; font-weight: 700; color: #f59e0b; line-height: 1.1; }
     .print-stat.positive .print-stat-value { color: #16a34a; }
     .print-stat.negative .print-stat-value { color: #dc2626; }
     .print-stat-label { font-size: 7pt; color: #6b7280; margin-top: 1px; }
 
-    /* Grafy */
     .print-chart-block { margin-bottom: 10px; break-inside: avoid; }
     .print-chart-title {
         font-size: 8.5pt;
         font-weight: 700;
-        background: #1e2937;
-        color: #fff;
-        padding: 3px 8px;
+        background: #1e2937 !important;
+        color: #fff !important;
+        padding: 4px 8px;
         border-radius: 4px 4px 0 0;
-        margin-bottom: 2px;
     }
-    .print-chart-block svg { display: block; }
+    .print-chart-block svg { display: block; width: 100%; }
 
-    /* Tabulka */
-    .print-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 8pt;
-    }
+    .print-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
     .print-table th {
         background: #f3f4f6 !important;
         font-weight: 600;
-        padding: 3px 6px;
+        padding: 3px 8px;
         border: 1px solid #dee2e6;
         text-align: center;
     }
-    .print-table td {
-        padding: 2px 6px;
-        border: 1px solid #dee2e6;
-        text-align: center;
-    }
+    .print-table td { padding: 2px 8px; border: 1px solid #dee2e6; text-align: center; }
     .print-table tbody tr:nth-child(odd) td { background: #f9fafb !important; }
 }
 </style>
