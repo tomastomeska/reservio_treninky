@@ -1,8 +1,15 @@
 <?php
 // ============================================================
-// Konfigurace databáze
-// Upravte podle vašeho nastavení WAMP/MySQL
+// Konfigurace databaze
+// Upravte podle vaseho nastaveni WAMP/MySQL
 // ============================================================
+
+// Bezpecnostni fallback: nacti env.php i kdyz nektery vstupni skript nenasel config.php
+$_envFile = __DIR__ . '/env.php';
+if (file_exists($_envFile)) {
+    require_once $_envFile;
+}
+unset($_envFile);
 
 if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
 if (!defined('DB_NAME'))    define('DB_NAME',    'marcelmiler');
@@ -26,13 +33,13 @@ function getDB(): PDO {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
             ensureSchemaUpgrades($pdo);
         } catch (PDOException $e) {
-            $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+            error_log('DB connection failed: ' . $e->getMessage());
             die('<!DOCTYPE html><html lang="cs"><head><meta charset="UTF-8">
                 <title>Chyba DB</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
                 </head><body class="bg-light"><div class="container mt-5">
                 <div class="alert alert-danger">
-                    <h4>Nelze se připojit k databázi</h4>
+                    <h4>Nelze se pripojit k databazi</h4>
                     <p>Zkontrolujte nastaveni v <code>config/env.php</code> dle <code>config/env.example.php</code> a ujistete se, ze databazovy server je dostupny.</p>
                 </div></div></body></html>');
         }
@@ -41,8 +48,7 @@ function getDB(): PDO {
 }
 
 function ensureSchemaUpgrades(PDO $pdo): void {
-    // Kompatibilita: starší instalace měly u sportovce pouze sloupec "age".
-    // Nově používáme "birth_date" kvůli automatickému přepočtu věku.
+    // Kompatibilita: starsi instalace mely u sportovce pouze sloupec "age".
     $stmt = $pdo->query("SHOW COLUMNS FROM athletes LIKE 'birth_date'");
     if (!$stmt->fetch()) {
         $pdo->exec('ALTER TABLE athletes ADD COLUMN birth_date DATE NULL AFTER last_name');
@@ -54,7 +60,7 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE exercises ADD COLUMN photo VARCHAR(255) NULL');
     }
 
-    // Globální cviky mohou mít coach_id = NULL
+    // Globalni cviky mohou mit coach_id = NULL
     $stmtCoachId = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'coach_id'");
     $coachIdColumn = $stmtCoachId->fetch();
     if ($coachIdColumn && strtoupper((string)($coachIdColumn['Null'] ?? 'NO')) !== 'YES') {
@@ -67,8 +73,8 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE athletes ADD COLUMN photo VARCHAR(255) NULL');
     }
 
-    // Tabulka superadministrátorů
-    $pdo->exec("
+    // Tabulka superadminu
+    $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `superadmins` (
             `id`         INT AUTO_INCREMENT PRIMARY KEY,
             `username`   VARCHAR(100) NOT NULL UNIQUE,
@@ -79,13 +85,13 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    // Aktivní stav trenéra (superadmin může zablokovat)
+    // Aktivni stav trenera
     $stmtAct = $pdo->query("SHOW COLUMNS FROM coaches LIKE 'is_active'");
     if (!$stmtAct->fetch()) {
         $pdo->exec('ALTER TABLE coaches ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1');
     }
 
-    // Globální cviky (is_global = 1 = viditelné všem trenérům, spravuje superadmin)
+    // Globalni cviky
     $stmtGlob = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'is_global'");
     if (!$stmtGlob->fetch()) {
         $pdo->exec('ALTER TABLE exercises ADD COLUMN is_global TINYINT(1) NOT NULL DEFAULT 0');
