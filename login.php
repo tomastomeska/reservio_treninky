@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
     </div>
     <div class="text-center mt-4 text-secondary small">
-        <div class="mb-1">verze <?= defined('APP_VERSION') ? APP_VERSION : '—' ?></div>
+        <div class="mb-1">verze <?= h(getAppSetting('app_version', defined('APP_VERSION') ? APP_VERSION : '—')) ?></div>
         <div>
             Vytvořil <strong class="text-white">Tomáš Tomeška</strong>
             &nbsp;·&nbsp;

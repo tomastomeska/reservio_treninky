@@ -79,6 +79,12 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
     }
 
+    // Tel. kontakt pro sportovce
+    $stmtPhone = $pdo->query("SHOW COLUMNS FROM athletes LIKE 'phone_contact'");
+    if (!$stmtPhone->fetch()) {
+        $pdo->exec('ALTER TABLE athletes ADD COLUMN phone_contact VARCHAR(20) NULL AFTER birth_date');
+    }
+
     // Tabulka superadminu
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `superadmins` (
@@ -120,5 +126,19 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             `message_version` INT NOT NULL,
             PRIMARY KEY (`coach_id`, `message_version`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Nastaveni aplikace (klic-hodnota)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `app_settings` (
+            `key`        VARCHAR(100) NOT NULL PRIMARY KEY,
+            `value`      TEXT NOT NULL,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    // Výchozí verze z konstanty – pouze pokud záznam ještě neexistuje
+    $pdo->exec("
+        INSERT IGNORE INTO `app_settings` (`key`, `value`)
+        VALUES ('app_version', '" . APP_VERSION . "')
     ");
 }

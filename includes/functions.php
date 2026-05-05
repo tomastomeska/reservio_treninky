@@ -9,6 +9,23 @@ if (!function_exists('h')) {
     }
 }
 
+if (!function_exists('getAppSetting')) {
+    function getAppSetting(string $key, string $default = ''): string {
+        static $cache = [];
+        if (isset($cache[$key])) return $cache[$key];
+        try {
+            $pdo  = getDB();
+            $stmt = $pdo->prepare('SELECT value FROM app_settings WHERE `key` = ?');
+            $stmt->execute([$key]);
+            $row = $stmt->fetch();
+            $cache[$key] = $row ? $row['value'] : $default;
+        } catch (\Throwable $e) {
+            $cache[$key] = $default;
+        }
+        return $cache[$key];
+    }
+}
+
 if (!function_exists('formatDate')) {
     function formatDate(?string $dt): string {
         return $dt ? date('d.m.Y', strtotime($dt)) : '–';

@@ -111,6 +111,10 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                         <td><?= $athlete['email'] ? '<a href="mailto:'.h($athlete['email']).'">'.h($athlete['email']).'</a>' : '–' ?></td>
                     </tr>
                     <tr>
+                        <td class="text-muted fw-semibold">Tel. kontakt</td>
+                        <td><?= $athlete['phone_contact'] ? h($athlete['phone_contact']) : '–' ?></td>
+                    </tr>
+                    <tr>
                         <td class="text-muted fw-semibold">Tréninků</td>
                         <td><span class="badge bg-warning text-dark"><?= count(array_filter($sessions, fn($s) => $s['completed_at'])) ?>×</span></td>
                     </tr>

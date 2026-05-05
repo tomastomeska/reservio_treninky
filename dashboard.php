@@ -53,6 +53,12 @@ renderHeader('Dashboard');
     <?php foreach ($athletes as $a): ?>
     <div class="col-md-6 col-xl-4">
         <div class="card athlete-card border-0 shadow-sm h-100">
+            <?php if ($a['photo']): ?>
+            <div style="height:120px; overflow:hidden; background:#f0f0f0">
+                <img src="<?= h(photoUrl($a['photo'], 'athletes')) ?>" alt="Fotografie"
+                     style="width:100%; height:100%; object-fit:cover;">
+            </div>
+            <?php endif; ?>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
@@ -70,6 +76,12 @@ renderHeader('Dashboard');
                 <?php if ($a['email']): ?>
                 <p class="text-muted small mb-2">
                     <i class="fas fa-envelope me-1"></i><?= h($a['email']) ?>
+                </p>
+                <?php endif; ?>
+
+                <?php if ($a['phone_contact']): ?>
+                <p class="text-muted small mb-2">
+                    <i class="fas fa-phone me-1"></i><?= h($a['phone_contact']) ?>
                 </p>
                 <?php endif; ?>
 
