@@ -53,13 +53,14 @@ renderHeader('Dashboard');
     <?php foreach ($athletes as $a): ?>
     <div class="col-md-6 col-xl-4">
         <div class="card athlete-card border-0 shadow-sm h-100">
-            <?php if ($a['photo']): ?>
-            <div style="height:120px; overflow:hidden; background:#f0f0f0">
-                <img src="<?= h(photoUrl($a['photo'], 'athletes')) ?>" alt="Fotografie"
-                     style="width:100%; height:100%; object-fit:cover;">
-            </div>
-            <?php endif; ?>
             <div class="card-body">
+                <?php if ($a['photo']): ?>
+                <div class="text-center mb-3">
+                    <img src="<?= h(photoUrl($a['photo'], 'athletes')) ?>" alt="Fotografie"
+                         class="rounded-circle"
+                         style="width:100px;height:100px;object-fit:cover;border:3px solid #ffc107;">
+                </div>
+                <?php endif; ?>
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
                         <h5 class="card-title mb-0 fw-bold">
