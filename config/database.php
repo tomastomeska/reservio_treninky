@@ -73,6 +73,12 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE athletes ADD COLUMN photo VARCHAR(255) NULL');
     }
 
+    // Foto sloupec pro dokonceny trenink
+    $stmtTsPhoto = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'training_photo'");
+    if (!$stmtTsPhoto->fetch()) {
+        $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
+    }
+
     // Tabulka superadminu
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `superadmins` (

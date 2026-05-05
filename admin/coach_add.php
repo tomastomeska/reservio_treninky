@@ -53,12 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $sent = sendCoachWelcomeEmail($email, $username, $password, $loginUrl);
 
-                    $mailInfo = $sent
-                        ? ' Přihlašovací údaje byly odeslány na e-mail.'
-                        : ' Trenér byl vytvořen, ale e-mail se nepodařilo odeslat (zkontrolujte log serveru).';
+                    if ($sent) {
+                        $mailInfo = ' Přihlašovací údaje byly odeslány na e-mail.';
+                    } else {
+                        // E-mail se nepodařilo odeslat – zobrazit přihlašovací údaje adminovi
+                        $mailInfo = ' E-mail se nepodařilo odeslat. Předejte trenérovi údaje ručně:'
+                            . ' Jméno: <strong>' . h($username) . '</strong>'
+                            . ' | Heslo: <strong>' . h($password) . '</strong>'
+                            . ' | URL: <a href="' . h($loginUrl) . '" target="_blank">' . h($loginUrl) . '</a>';
+                    }
                 }
 
-                flash('success', 'Trener ' . $username . ' byl uspesne pridan.' . ($mailInfo ?? ''));
+                flash('success', 'Trenér ' . h($username) . ' byl úspěšně přidán.' . ($mailInfo ?? ''));
                 redirect(BASE_URL . '/admin/coaches.php');
             }
         }

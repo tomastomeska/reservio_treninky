@@ -165,7 +165,7 @@ renderHeader('Aktivní trénink');
 <div class="modal fade" id="completeModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="<?= BASE_URL ?>/training_complete.php">
+            <form method="post" action="<?= BASE_URL ?>/training_complete.php" enctype="multipart/form-data">
                 <?= csrfField() ?>
                 <input type="hidden" name="session_id" value="<?= $sessionId ?>">
                 <div class="modal-header bg-success text-white">
@@ -188,6 +188,24 @@ renderHeader('Aktivní trénink');
                         <label class="form-label fw-semibold">Poznámka <small class="text-muted">(volitelné)</small></label>
                         <textarea name="notes" class="form-control" rows="2"
                                   placeholder="Celkové hodnocení tréninku..."></textarea>
+                    </div>
+                    <div class="mb-2 mt-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-camera me-1"></i>Fotografie z tréninku
+                            <small class="text-muted">(volitelné)</small>
+                        </label>
+                        <input type="file"
+                               name="training_photo"
+                               class="form-control"
+                               accept="image/*"
+                               capture="environment"
+                               onchange="previewTrainingPhoto(this)">
+                        <div class="form-text">
+                            Mobil/tablet nabídne fotoaparát, na počítači výběr souboru. Podporováno JPG, PNG, GIF, WEBP (max 8 MB).
+                        </div>
+                        <img id="training-photo-preview" alt="Náhled fotky"
+                             class="img-fluid rounded border mt-2 d-none"
+                             style="max-height:220px; object-fit:cover;">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -306,6 +324,25 @@ function updateSeriesCount(exerciseId) {
     if (badge) {
         badge.textContent = count + ' séri' + (count === 1 ? 'e' : 'í');
     }
+}
+
+function previewTrainingPhoto(input) {
+    const preview = document.getElementById('training-photo-preview');
+    const file = input.files && input.files[0] ? input.files[0] : null;
+    if (!preview || !file) {
+        if (preview) {
+            preview.classList.add('d-none');
+            preview.removeAttribute('src');
+        }
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        preview.src = e.target.result;
+        preview.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
 }
 
 // Klávesa Enter v poli dopomoci = přidá sérii

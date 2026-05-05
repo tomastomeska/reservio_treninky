@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="text-center mb-4">
         <div class="display-4 text-warning mb-2">🏋️</div>
         <h2 class="text-white fw-bold" id="appTitle" style="cursor:default;user-select:none"><?= APP_NAME ?></h2>
-        <p class="text-secondary">Systém pro trenéry a sportovce</p>
+        <p class="text-secondary">Aplikace pro trenéry</p>
     </div>
     <div class="card shadow-lg border-0">
         <div class="card-body p-4">
@@ -86,10 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
         </div>
     </div>
-    <p class="text-center text-secondary mt-3 small">
-        Nemáte účet? <a href="<?= BASE_URL ?>/install.php" class="text-warning">Spustit instalaci</a>
-    </p>
-</div>
+    </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('appTitle').addEventListener('dblclick', function () {

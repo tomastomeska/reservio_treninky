@@ -305,6 +305,13 @@ HTML;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
         $mail->CharSet    = 'UTF-8';
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer'       => false,
+                'verify_peer_name'  => false,
+                'allow_self_signed' => true,
+            ],
+        ];
 
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         $mail->addAddress($toEmail);
@@ -317,7 +324,7 @@ HTML;
         $mail->send();
         return true;
     } catch (\Exception $e) {
-        error_log('sendCoachWelcomeEmail error: ' . $mail->ErrorInfo);
+        error_log('sendCoachWelcomeEmail error: ' . $mail->ErrorInfo . ' | Exception: ' . $e->getMessage());
         return false;
     }
 }

@@ -73,7 +73,7 @@ function renderAdminHeader(string $title = ''): void {
 	<div class="col p-4">
 <?php if ($flash): ?>
 <div class="alert alert-<?= h($flash['type']) ?> alert-dismissible fade show" role="alert">
-	<?= h($flash['message']) ?>
+	<?= $flash['message'] ?>
 	<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>

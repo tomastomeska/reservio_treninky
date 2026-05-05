@@ -2,6 +2,12 @@
 // setup_admin.php – jednorázové vytvoření prvního superadmin účtu
 // Po vytvoření účtu tento soubor smažte!
 require_once __DIR__ . '/config/config.php';
+if (!defined('ENABLE_SETUP_ADMIN') || ENABLE_SETUP_ADMIN !== true) {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo '404 Not Found';
+    exit;
+}
 require_once __DIR__ . '/config/database.php';
 
 $error   = null;

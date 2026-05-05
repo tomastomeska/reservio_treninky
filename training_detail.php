@@ -185,6 +185,18 @@ renderHeader('Detail tréninku');
 </div>
 <?php endif; ?>
 
+<?php if (!empty($session['training_photo'])): ?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white"><i class="fas fa-camera me-2"></i>Fotografie z tréninku</div>
+    <div class="card-body text-center">
+        <img src="<?= h(photoUrl($session['training_photo'], 'trainings')) ?>"
+             alt="Fotografie z tréninku"
+             class="img-fluid rounded"
+             style="max-height:500px; object-fit:contain;">
+    </div>
+</div>
+<?php endif; ?>
+
 <style>
 @media print {
     .navbar, .btn, footer { display: none !important; }

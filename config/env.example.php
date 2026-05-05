@@ -18,3 +18,7 @@ define('BASE_URL',   '');
 
 // true na produkci (HTTPS), false při lokálním vývoji
 define('SESSION_SECURE', false);
+
+
+// Bezpecnostni pojistka setup_admin.php (na produkci ponechte false)
+define('ENABLE_SETUP_ADMIN', false);

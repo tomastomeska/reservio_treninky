@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS `training_sessions` (
     `workout_set_id`  INT NOT NULL,
     `location`        VARCHAR(300),
     `notes`           TEXT,
+    `training_photo`  VARCHAR(255),
     `started_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `completed_at`    TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (`athlete_id`)     REFERENCES `athletes`(`id`)     ON DELETE CASCADE,

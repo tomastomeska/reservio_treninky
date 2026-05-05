@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
         redirect(BASE_URL . '/admin/coaches.php');
     }
     $pdo->prepare('DELETE FROM coaches WHERE id = ?')->execute([$coachId]);
-    flash('success', 'Trenér ' . $coach['username'] . ' byl smazán se všemi daty.');
+    flash('success', 'Trenér ' . h($coach['username']) . ' byl smazán se všemi daty.');
     redirect(BASE_URL . '/admin/coaches.php');
 }
 
