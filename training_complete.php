@@ -30,7 +30,7 @@ if (!empty($_FILES['training_photo']) && ($_FILES['training_photo']['error'] ?? 
         redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
     }
 
-    $trainingPhoto = saveUploadedPhoto('training_photo', 'trainings');
+    $trainingPhoto = resizeAndSavePhoto('training_photo', 'trainings');
     if (!$trainingPhoto) {
         flash('danger', 'Podporujeme pouze obrázky JPG, PNG, GIF nebo WEBP.');
         redirect(BASE_URL . '/training_session.php?id=' . $sessionId);

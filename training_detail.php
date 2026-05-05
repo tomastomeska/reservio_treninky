@@ -186,8 +186,34 @@ renderHeader('Detail tréninku');
 <?php endif; ?>
 
 <?php if (!empty($session['training_photo'])): ?>
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-dark text-white"><i class="fas fa-camera me-2"></i>Fotografie z tréninku</div>
+<div class="card border-0 shadow-sm mb-4" id="training-photo">
+    <div class="card-header bg-dark text-white d-flex align-items-center">
+        <span><i class="fas fa-camera me-2"></i>Fotografie z tréninku</span>
+        <div class="ms-auto d-flex gap-2">
+            <!-- Změnit fotku -->
+            <label class="btn btn-outline-warning btn-sm mb-0" title="Změnit fotografii">
+                <i class="fas fa-exchange-alt me-1"></i>Změnit
+                <form method="post" action="<?= BASE_URL ?>/training_photo_update.php"
+                      enctype="multipart/form-data" class="d-none" id="changePhotoForm">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+                    <input type="hidden" name="action" value="update">
+                    <input type="file" name="training_photo" accept="image/*" capture="environment"
+                           onchange="this.form.submit()">
+                </form>
+            </label>
+            <!-- Smazat fotku -->
+            <form method="post" action="<?= BASE_URL ?>/training_photo_update.php"
+                  onsubmit="return confirm('Opravdu smazat fotografii tréninku?')">
+                <?= csrfField() ?>
+                <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="fas fa-trash me-1"></i>Smazat
+                </button>
+            </form>
+        </div>
+    </div>
     <div class="card-body text-center">
         <img src="<?= h(photoUrl($session['training_photo'], 'trainings')) ?>"
              alt="Fotografie z tréninku"
@@ -195,6 +221,38 @@ renderHeader('Detail tréninku');
              style="max-height:500px; object-fit:contain;">
     </div>
 </div>
+<?php elseif ($session['completed_at']): ?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white"><i class="fas fa-camera me-2"></i>Fotografie z tréninku</div>
+    <div class="card-body">
+        <p class="text-muted mb-3">K tomuto tréninku zatím není přiřazena žádná fotografie.</p>
+        <form method="post" action="<?= BASE_URL ?>/training_photo_update.php"
+              enctype="multipart/form-data">
+            <?= csrfField() ?>
+            <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+            <input type="hidden" name="action" value="update">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <input type="file" name="training_photo" class="form-control" style="max-width:320px;"
+                       accept="image/*" capture="environment"
+                       onchange="previewAddPhoto(this)">
+                <button type="submit" class="btn btn-outline-success">
+                    <i class="fas fa-upload me-1"></i>Přidat fotografii
+                </button>
+            </div>
+            <img id="add-photo-preview" class="img-fluid rounded border mt-3 d-none"
+                 alt="Náhled" style="max-height:180px; object-fit:cover;">
+        </form>
+    </div>
+</div>
+<script>
+function previewAddPhoto(input) {
+    const preview = document.getElementById('add-photo-preview');
+    if (!preview || !input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.classList.remove('d-none'); };
+    reader.readAsDataURL(input.files[0]);
+}
+</script>
 <?php endif; ?>
 
 <style>

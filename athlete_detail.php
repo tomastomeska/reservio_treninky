@@ -199,6 +199,7 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                         <th>Místo</th>
                         <th class="text-center">Sérií</th>
                         <th>Stav</th>
+                        <th class="text-center" title="Fotografie"><i class="fas fa-camera"></i></th>
                         <th class="text-end">Akce</th>
                     </tr>
                 </thead>
@@ -217,6 +218,18 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                             <span class="badge bg-success">Dokončeno</span>
                             <?php else: ?>
                             <span class="badge bg-warning text-dark">Probíhá</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-center">
+                            <?php if (!empty($s['training_photo'])): ?>
+                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
+                               title="Zobrazit fotografii">
+                                <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
+                                     alt="foto"
+                                     style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
+                            </a>
+                            <?php else: ?>
+                            <span class="text-muted">–</span>
                             <?php endif; ?>
                         </td>
                         <td class="text-end">

@@ -109,6 +109,111 @@ if (!function_exists('intParam')) {
 // ============================================================
 
 /**
+ * Nahraje a automaticky zmenší fotografii z $_FILES[$inputName] do uploads/$subDir/.
+ * Používá GD pro resize (max 1920 px na delší stranu) a úsporu místa.
+ * Vrátí název souboru nebo null při chybě / žádný soubor.
+ */
+function resizeAndSavePhoto(string $inputName, string $subDir, int $maxDim = 1920, int $quality = 82): ?string {
+    if (empty($_FILES[$inputName]) || $_FILES[$inputName]['error'] === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    $file = $_FILES[$inputName];
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime  = $finfo->file($file['tmp_name']);
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/gif'  => 'gif',
+        'image/webp' => 'webp',
+    ];
+    if (!array_key_exists($mime, $allowed)) {
+        return null;
+    }
+
+    $dir = dirname(__DIR__) . '/uploads/' . $subDir . '/';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    // Pokud GD není dostupné, ulož soubor bez resize
+    if (!extension_loaded('gd')) {
+        $ext      = $allowed[$mime];
+        $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+        if (!move_uploaded_file($file['tmp_name'], $dir . $filename)) {
+            return null;
+        }
+        return $filename;
+    }
+
+    // Načti obraz přes GD
+    $src = match ($mime) {
+        'image/jpeg' => @imagecreatefromjpeg($file['tmp_name']),
+        'image/png'  => @imagecreatefrompng($file['tmp_name']),
+        'image/gif'  => @imagecreatefromgif($file['tmp_name']),
+        'image/webp' => @imagecreatefromwebp($file['tmp_name']),
+        default      => false,
+    };
+
+    if (!$src) {
+        // GD nepodporuje soubor, ulož přímo
+        $ext      = $allowed[$mime];
+        $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+        if (!move_uploaded_file($file['tmp_name'], $dir . $filename)) {
+            return null;
+        }
+        return $filename;
+    }
+
+    $origW = imagesx($src);
+    $origH = imagesy($src);
+
+    // Vypočítej nové rozměry (zmenšení jen pokud je větší než maxDim)
+    if ($origW > $maxDim || $origH > $maxDim) {
+        $ratio  = min($maxDim / $origW, $maxDim / $origH);
+        $newW   = (int)round($origW * $ratio);
+        $newH   = (int)round($origH * $ratio);
+    } else {
+        $newW = $origW;
+        $newH = $origH;
+    }
+
+    $dst = imagecreatetruecolor($newW, $newH);
+    if (!$dst) {
+        imagedestroy($src);
+        return null;
+    }
+
+    // Zachovej průhlednost pro PNG
+    if ($mime === 'image/png') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $newW, $newH, $transparent);
+    }
+
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+    imagedestroy($src);
+
+    // Vždy ukládej jako JPEG (kromě PNG s průhledností) pro kompaktnější soubor
+    if ($mime === 'image/png') {
+        $ext      = 'png';
+        $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+        $saved    = imagepng($dst, $dir . $filename, min(9, (int)round((100 - $quality) / 10)));
+    } else {
+        $ext      = 'jpg';
+        $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+        $saved    = imagejpeg($dst, $dir . $filename, $quality);
+    }
+    imagedestroy($dst);
+
+    return $saved ? $filename : null;
+}
+
+/**
  * Nahraje soubor z $_FILES[$inputName] do uploads/$subDir/.
  * Vrátí název souboru nebo null při chybě / žádný soubor.
  */
