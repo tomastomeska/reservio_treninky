@@ -45,39 +45,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Odeslani prihlasovacich udaju e-mailem (pokud je zadany e-mail)
                 $mailInfo = null;
                 if ($email !== '') {
-                    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                    $isHttps  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
                         || (($_SERVER['SERVER_PORT'] ?? '') === '443');
-                    $scheme = $isHttps ? 'https' : 'http';
-                    $host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+                    $scheme   = $isHttps ? 'https' : 'http';
+                    $host     = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
                     $loginUrl = $scheme . '://' . $host . BASE_URL . '/login.php';
 
-                    $subject = 'Prihlasovaci udaje do TrainerApp';
-                    $body  = "Dobry den,\n\n";
-                    $body .= "byl vam vytvoren ucet trenera v aplikaci TrainerApp.\n\n";
-                    $body .= "Prihlasovaci stranka: " . $loginUrl . "\n";
-                    $body .= "Uzivatelske jmeno: " . $username . "\n";
-                    $body .= "Heslo: " . $password . "\n\n";
-                    $body .= "Doporuceni: po prvnim prihlaseni si heslo ihned zmente v profilu.\n\n";
-                    $body .= "S pozdravem\n";
-                    $body .= "Administrace TrainerApp\n";
-
-                    $headers = [
-                        'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
-                        'Reply-To: ' . MAIL_FROM,
-                        'X-Mailer: PHP/' . phpversion(),
-                        'Content-Type: text/plain; charset=UTF-8',
-                    ];
-
-                    $sent = mail(
-                        $email,
-                        '=?UTF-8?B?' . base64_encode($subject) . '?=',
-                        $body,
-                        implode("\r\n", $headers)
-                    );
+                    $sent = sendCoachWelcomeEmail($email, $username, $password, $loginUrl);
 
                     $mailInfo = $sent
-                        ? ' Prihlasovaci udaje byly odeslany na e-mail.'
-                        : ' Trener byl vytvoren, ale e-mail se nepodarilo odeslat.';
+                        ? ' Přihlašovací údaje byly odeslány na e-mail.'
+                        : ' Trenér byl vytvořen, ale e-mail se nepodařilo odeslat (zkontrolujte log serveru).';
                 }
 
                 flash('success', 'Trener ' . $username . ' byl uspesne pridan.' . ($mailInfo ?? ''));

@@ -160,3 +160,51 @@ function photoUrl(?string $filename, string $subDir): string {
     }
     return BASE_URL . '/uploads/' . $subDir . '/' . rawurlencode($filename);
 }
+
+/**
+ * Odešle uvítací e-mail trenérovi s přihlašovacími údaji přes SMTP (PHPMailer).
+ * Vrátí true při úspěchu, false při chybě.
+ */
+function sendCoachWelcomeEmail(string $toEmail, string $username, string $password, string $loginUrl): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        error_log('sendCoachWelcomeEmail: PHPMailer not found at ' . $phpmailerSrc);
+        return false;
+    }
+
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        $mail->CharSet    = 'UTF-8';
+
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->Subject = 'Přihlašovací údaje do TrainerApp';
+        $mail->Body =
+            "Dobrý den,\n\n" .
+            "byl vám vytvořen účet trenéra v aplikaci TrainerApp.\n\n" .
+            "Přihlašovací stránka: " . $loginUrl . "\n" .
+            "Uživatelské jméno: " . $username . "\n" .
+            "Heslo: " . $password . "\n\n" .
+            "Doporučení: po prvním přihlášení si heslo ihned změňte v profilu.\n\n" .
+            "S pozdravem\n" .
+            "Administrace TrainerApp\n";
+
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendCoachWelcomeEmail error: ' . $mail->ErrorInfo);
+        return false;
+    }
+}
