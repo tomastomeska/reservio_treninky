@@ -11,7 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false,
+        'secure'   => defined('SESSION_SECURE') ? SESSION_SECURE : false,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);

@@ -1,5 +1,5 @@
 <?php
-// admin/coach_add.php – přidání nového trenéra
+// admin/coach_add.php - pridani noveho trenera
 require_once __DIR__ . '/../includes/admin_auth.php';
 require_once __DIR__ . '/header.php';
 
@@ -10,44 +10,84 @@ $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
-        $error = 'Neplatný bezpečnostní token.';
+        $error = 'Neplatny bezpecnostni token.';
     } else {
-        $username = trim($_POST['username'] ?? '');
-        $name     = trim($_POST['name']     ?? '');
-        $email    = trim($_POST['email']    ?? '');
-        $password = $_POST['password'] ?? '';
+        $username  = trim($_POST['username'] ?? '');
+        $name      = trim($_POST['name'] ?? '');
+        $email     = trim($_POST['email'] ?? '');
+        $password  = $_POST['password'] ?? '';
         $password2 = $_POST['password2'] ?? '';
         $isActive  = isset($_POST['is_active']) ? 1 : 0;
 
         if ($username === '') {
-            $error = 'Zadejte uživatelské jméno.';
+            $error = 'Zadejte uzivatelske jmeno.';
         } elseif (!preg_match('/^[a-z0-9_.\-]{3,50}$/i', $username)) {
-            $error = 'Uživatelské jméno smí obsahovat jen písmena, číslice, tečku, pomlčku a podtržítko (3–50 znaků).';
+            $error = 'Uzivatelske jmeno smi obsahovat jen pismena, cislice, tecku, pomlcku a podtrzitko (3-50 znaku).';
         } elseif (strlen($password) < 6) {
-            $error = 'Heslo musí mít alespoň 6 znaků.';
+            $error = 'Heslo musi mit alespon 6 znaku.';
         } elseif ($password !== $password2) {
-            $error = 'Hesla se neshodují.';
+            $error = 'Hesla se neshoduji.';
         } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Neplatná e-mailová adresa.';
+            $error = 'Neplatna e-mailova adresa.';
         } else {
-            // Unikátnost uživatelského jména
+            // Unikatnost uzivatelskeho jmena
             $stmt = $pdo->prepare('SELECT id FROM coaches WHERE username = ?');
             $stmt->execute([$username]);
+
             if ($stmt->fetch()) {
-                $error = 'Toto uživatelské jméno je již obsazeno.';
+                $error = 'Toto uzivatelske jmeno je jiz obsazeno.';
             } else {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $pdo->prepare(
                     'INSERT INTO coaches (username, password, name, email, is_active) VALUES (?, ?, ?, ?, ?)'
                 )->execute([$username, $hash, $name ?: null, $email ?: null, $isActive]);
-                flash('success', 'Trenér ' . $username . ' byl úspěšně přidán.');
+
+                // Odeslani prihlasovacich udaju e-mailem (pokud je zadany e-mail)
+                $mailInfo = null;
+                if ($email !== '') {
+                    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                        || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+                    $scheme = $isHttps ? 'https' : 'http';
+                    $host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+                    $loginUrl = $scheme . '://' . $host . BASE_URL . '/login.php';
+
+                    $subject = 'Prihlasovaci udaje do TrainerApp';
+                    $body  = "Dobry den,\n\n";
+                    $body .= "byl vam vytvoren ucet trenera v aplikaci TrainerApp.\n\n";
+                    $body .= "Prihlasovaci stranka: " . $loginUrl . "\n";
+                    $body .= "Uzivatelske jmeno: " . $username . "\n";
+                    $body .= "Heslo: " . $password . "\n\n";
+                    $body .= "Doporuceni: po prvnim prihlaseni si heslo ihned zmente v profilu.\n\n";
+                    $body .= "S pozdravem\n";
+                    $body .= "Administrace TrainerApp\n";
+
+                    $headers = [
+                        'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
+                        'Reply-To: ' . MAIL_FROM,
+                        'X-Mailer: PHP/' . phpversion(),
+                        'Content-Type: text/plain; charset=UTF-8',
+                    ];
+
+                    $sent = mail(
+                        $email,
+                        '=?UTF-8?B?' . base64_encode($subject) . '?=',
+                        $body,
+                        implode("\r\n", $headers)
+                    );
+
+                    $mailInfo = $sent
+                        ? ' Prihlasovaci udaje byly odeslany na e-mail.'
+                        : ' Trener byl vytvoren, ale e-mail se nepodarilo odeslat.';
+                }
+
+                flash('success', 'Trener ' . $username . ' byl uspesne pridan.' . ($mailInfo ?? ''));
                 redirect(BASE_URL . '/admin/coaches.php');
             }
         }
     }
 }
 
-renderAdminHeader('Přidat trenéra');
+renderAdminHeader('Pridat trenera');
 ?>
 
 <div class="d-flex align-items-center mb-4 gap-3">
@@ -55,7 +95,7 @@ renderAdminHeader('Přidat trenéra');
         <i class="fas fa-arrow-left"></i>
     </a>
     <h4 class="fw-bold mb-0">
-        <i class="fas fa-user-plus me-2" style="color:#a78bfa"></i>Přidat trenéra
+        <i class="fas fa-user-plus me-2" style="color:#a78bfa"></i>Pridat trenera
     </h4>
 </div>
 
@@ -69,19 +109,19 @@ renderAdminHeader('Přidat trenéra');
             <?= csrfField() ?>
             <div class="row g-3 mb-3">
                 <div class="col-sm-6">
-                    <label class="form-label fw-semibold">Jméno trenéra</label>
+                    <label class="form-label fw-semibold">Jmeno trenera</label>
                     <input type="text" name="name" class="form-control"
                            value="<?= h($_POST['name'] ?? '') ?>"
-                           placeholder="Jan Novák">
+                           placeholder="Jan Novak">
                 </div>
                 <div class="col-sm-6">
                     <label class="form-label fw-semibold">
-                        Uživatelské jméno <span class="text-danger">*</span>
+                        Uzivatelske jmeno <span class="text-danger">*</span>
                     </label>
                     <input type="text" name="username" class="form-control"
                            value="<?= h($_POST['username'] ?? '') ?>"
                            required autofocus autocomplete="off">
-                    <div class="form-text">3–50 znaků: písmena, číslice, . - _</div>
+                    <div class="form-text">3-50 znaku: pismena, cislice, . - _</div>
                 </div>
             </div>
             <div class="mb-3">
@@ -94,7 +134,7 @@ renderAdminHeader('Přidat trenéra');
                 <div class="col-sm-6">
                     <label class="form-label fw-semibold">
                         Heslo <span class="text-danger">*</span>
-                        <small class="text-muted fw-normal">(min. 6 znaků)</small>
+                        <small class="text-muted fw-normal">(min. 6 znaku)</small>
                     </label>
                     <input type="password" name="password" class="form-control"
                            required autocomplete="new-password">
@@ -113,16 +153,16 @@ renderAdminHeader('Přidat trenéra');
                            id="isActive" value="1"
                            <?= (!isset($_POST['is_active']) || $_POST['is_active']) ? 'checked' : '' ?>>
                     <label class="form-check-label fw-semibold" for="isActive">
-                        Trenér je aktivní (může se přihlásit)
+                        Trener je aktivni (muze se prihlasit)
                     </label>
                 </div>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn fw-bold px-4"
                         style="background:#7c3aed;color:#fff;border:none">
-                    <i class="fas fa-save me-1"></i>Vytvořit trenéra
+                    <i class="fas fa-save me-1"></i>Vytvorit trenera
                 </button>
-                <a href="<?= BASE_URL ?>/admin/coaches.php" class="btn btn-outline-secondary">Zrušit</a>
+                <a href="<?= BASE_URL ?>/admin/coaches.php" class="btn btn-outline-secondary">Zrusit</a>
             </div>
         </form>
     </div>
