@@ -32,6 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     session_regenerate_id(true);
                     $_SESSION['coach_id']   = $coach['id'];
                     $_SESSION['coach_name'] = $coach['name'] ?: $username;
+                    // Aktualizace posledního přihlášení
+                    $pdo->prepare('UPDATE coaches SET last_login = NOW() WHERE id = ?')->execute([$coach['id']]);
                     redirect(BASE_URL . '/dashboard.php');
                 }
             } else {

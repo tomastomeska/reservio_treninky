@@ -30,7 +30,7 @@ $coaches = $pdo->query(
      LEFT JOIN exercises e ON e.coach_id = c.id
      LEFT JOIN training_sessions ts ON ts.athlete_id = a.id AND ts.completed_at IS NOT NULL
      GROUP BY c.id
-     ORDER BY c.created_at DESC'
+     ORDER BY c.last_login DESC, c.created_at DESC'
 )->fetchAll();
 
 renderAdminHeader('Trenéři');
@@ -67,6 +67,7 @@ renderAdminHeader('Trenéři');
                         <th class="text-center">Cviky</th>
                         <th class="text-center">Tréninky</th>
                         <th class="text-center">Stav</th>
+                        <th>Poslední přihlášení</th>
                         <th>Přidán</th>
                         <th class="text-end">Akce</th>
                     </tr>
@@ -99,6 +100,11 @@ renderAdminHeader('Trenéři');
                             <?php else: ?>
                             <span class="badge bg-secondary"><i class="fas fa-ban me-1"></i>Blokován</span>
                             <?php endif; ?>
+                        </td>
+                        <td class="text-muted small">
+                            <?= $c['last_login']
+                                ? formatDateTime($c['last_login'])
+                                : '<span class="text-muted">Nikdy</span>' ?>
                         </td>
                         <td class="text-muted small"><?= formatDate($c['created_at']) ?></td>
                         <td class="text-end">

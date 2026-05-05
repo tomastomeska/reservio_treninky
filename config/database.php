@@ -85,6 +85,12 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE athletes ADD COLUMN phone_contact VARCHAR(20) NULL AFTER birth_date');
     }
 
+    // Poslední přihlášení trenéra
+    $stmtLogin = $pdo->query("SHOW COLUMNS FROM coaches LIKE 'last_login'");
+    if (!$stmtLogin->fetch()) {
+        $pdo->exec('ALTER TABLE coaches ADD COLUMN last_login DATETIME NULL');
+    }
+
     // Tabulka superadminu
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `superadmins` (
@@ -141,4 +147,10 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         INSERT IGNORE INTO `app_settings` (`key`, `value`)
         VALUES ('app_version', '" . APP_VERSION . "')
     ");
+
+    // Poslední přihlášení superadmina
+    $stmtAdminLogin = $pdo->query("SHOW COLUMNS FROM superadmins LIKE 'last_login'");
+    if (!$stmtAdminLogin->fetch()) {
+        $pdo->exec('ALTER TABLE superadmins ADD COLUMN last_login DATETIME NULL');
+    }
 }

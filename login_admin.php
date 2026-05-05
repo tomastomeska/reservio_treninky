@@ -29,6 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['superadmin_id']   = $admin['id'];
                 $_SESSION['superadmin_name'] = $admin['name'] ?: $username;
+                // Aktualizace posledního přihlášení
+                $pdo->prepare('UPDATE superadmins SET last_login = NOW() WHERE id = ?')->execute([$admin['id']]);
                 redirect(BASE_URL . '/admin/dashboard.php');
             } else {
                 // Záměrné zpoždění pro ochranu proti brute-force
