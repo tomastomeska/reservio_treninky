@@ -102,4 +102,23 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     if (!$stmtGlob->fetch()) {
         $pdo->exec('ALTER TABLE exercises ADD COLUMN is_global TINYINT(1) NOT NULL DEFAULT 0');
     }
+
+    // Hlaska po prihlaseni (admin edituje zpravy pro trenery)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `login_message` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `message`    TEXT NOT NULL,
+            `version`    INT NOT NULL DEFAULT 1,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Sledovani trvaleho skryti hlasky konkretnim trenerem
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `coach_message_seen` (
+            `coach_id`        INT NOT NULL,
+            `message_version` INT NOT NULL,
+            PRIMARY KEY (`coach_id`, `message_version`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 }

@@ -103,6 +103,19 @@ renderAdminHeader('Trenéři');
                         <td class="text-muted small"><?= formatDate($c['created_at']) ?></td>
                         <td class="text-end">
                             <div class="d-flex gap-1 justify-content-end">
+                                <!-- Přepnout na profil trenéra -->
+                                <?php if ($c['is_active']): ?>
+                                <form method="post" action="<?= BASE_URL ?>/admin/impersonate.php">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="coach_id" value="<?= $c['id'] ?>">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-primary"
+                                            title="Přepnout do profilu trenéra"
+                                            onclick="return confirm('Přepnout do profilu trenéra <?= h(addslashes($c['name'] ?: $c['username'])) ?>?')">
+                                        <i class="fas fa-user-secret"></i>
+                                    </button>
+                                </form>
+                                <?php endif; ?>
                                 <!-- Editace -->
                                 <a href="<?= BASE_URL ?>/admin/coach_edit.php?id=<?= $c['id'] ?>"
                                    class="btn btn-outline-secondary btn-sm" title="Upravit">

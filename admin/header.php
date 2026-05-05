@@ -65,6 +65,10 @@ function renderAdminHeader(string $title = ''): void {
 				   class="nav-link <?= in_array(basename($_SERVER['PHP_SELF']), ['exercises.php','exercise_export.php','exercise_import.php']) ? 'active' : '' ?>">
 					<i class="fas fa-globe me-2"></i>Globální cviky
 				</a>
+				<a href="<?= BASE_URL ?>/admin/login_message.php"
+				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'login_message.php' ? 'active' : '' ?>">
+					<i class="fas fa-bell me-2"></i>Hláška po přihlášení
+				</a>
 			</div>
 		</div>
 	</div>

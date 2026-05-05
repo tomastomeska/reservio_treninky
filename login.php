@@ -87,6 +87,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     </div>
+    <div class="text-center mt-4 text-secondary small">
+        <div class="mb-1">verze <?= defined('APP_VERSION') ? APP_VERSION : '—' ?></div>
+        <div>
+            Vytvořil <strong class="text-white">Tomáš Tomeška</strong>
+            &nbsp;·&nbsp;
+            <a href="mailto:tomas.tomeska@seznam.cz" class="text-warning text-decoration-none">
+                <i class="fas fa-envelope me-1"></i>tomas.tomeska@seznam.cz
+            </a>
+        </div>
+    </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('appTitle').addEventListener('dblclick', function () {
