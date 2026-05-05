@@ -1,0 +1,138 @@
+<?php
+// admin/coaches.php – správa trenérů
+require_once __DIR__ . '/../includes/admin_auth.php';
+require_once __DIR__ . '/header.php';
+
+requireAdminLogin();
+
+$pdo = getDB();
+
+// Rychlý toggle aktivity
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggle') {
+    if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
+        flash('danger', 'Neplatný bezpečnostní token.');
+        redirect(BASE_URL . '/admin/coaches.php');
+    }
+    $cid = intParam($_POST, 'coach_id');
+    $pdo->prepare('UPDATE coaches SET is_active = 1 - is_active WHERE id = ?')->execute([$cid]);
+    flash('success', 'Stav trenéra byl změněn.');
+    redirect(BASE_URL . '/admin/coaches.php');
+}
+
+// Všichni trenéři se statistikami
+$coaches = $pdo->query(
+    'SELECT c.*,
+            COUNT(DISTINCT a.id)  AS athlete_count,
+            COUNT(DISTINCT e.id)  AS exercise_count,
+            COUNT(DISTINCT ts.id) AS session_count
+     FROM coaches c
+     LEFT JOIN athletes a ON a.coach_id = c.id
+     LEFT JOIN exercises e ON e.coach_id = c.id
+     LEFT JOIN training_sessions ts ON ts.athlete_id = a.id AND ts.completed_at IS NOT NULL
+     GROUP BY c.id
+     ORDER BY c.created_at DESC'
+)->fetchAll();
+
+renderAdminHeader('Trenéři');
+?>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0">
+        <i class="fas fa-user-tie me-2" style="color:#a78bfa"></i>Správa trenérů
+        <span class="badge ms-2" style="background:#312e81"><?= count($coaches) ?></span>
+    </h4>
+    <a href="<?= BASE_URL ?>/admin/coach_add.php" class="btn fw-bold"
+       style="background:#7c3aed;color:#fff;border:none">
+        <i class="fas fa-plus me-1"></i>Přidat trenéra
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <?php if (empty($coaches)): ?>
+        <div class="text-center py-5 text-muted">
+            <i class="fas fa-user-slash fa-3x mb-3 d-block"></i>
+            Zatím žádní trenéři. <a href="<?= BASE_URL ?>/admin/coach_add.php">Přidat prvního trenéra.</a>
+        </div>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Trenér</th>
+                        <th>Uživatelské jméno</th>
+                        <th>E-mail</th>
+                        <th class="text-center">Sportovci</th>
+                        <th class="text-center">Cviky</th>
+                        <th class="text-center">Tréninky</th>
+                        <th class="text-center">Stav</th>
+                        <th>Přidán</th>
+                        <th class="text-end">Akce</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($coaches as $i => $c): ?>
+                    <tr class="<?= $c['is_active'] ? '' : 'table-secondary text-muted' ?>">
+                        <td class="text-muted small"><?= $i + 1 ?></td>
+                        <td>
+                            <span class="fw-semibold"><?= h($c['name'] ?: '–') ?></span>
+                        </td>
+                        <td><code><?= h($c['username']) ?></code></td>
+                        <td>
+                            <?= $c['email']
+                                ? '<a href="mailto:' . h($c['email']) . '">' . h($c['email']) . '</a>'
+                                : '<span class="text-muted">–</span>' ?>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-warning text-dark"><?= $c['athlete_count'] ?></span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark border"><?= $c['exercise_count'] ?></span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info text-dark"><?= $c['session_count'] ?></span>
+                        </td>
+                        <td class="text-center">
+                            <?php if ($c['is_active']): ?>
+                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Aktivní</span>
+                            <?php else: ?>
+                            <span class="badge bg-secondary"><i class="fas fa-ban me-1"></i>Blokován</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-muted small"><?= formatDate($c['created_at']) ?></td>
+                        <td class="text-end">
+                            <div class="d-flex gap-1 justify-content-end">
+                                <!-- Editace -->
+                                <a href="<?= BASE_URL ?>/admin/coach_edit.php?id=<?= $c['id'] ?>"
+                                   class="btn btn-outline-secondary btn-sm" title="Upravit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <!-- Toggle aktivity -->
+                                <form method="post" class="d-inline">
+                                    <?= csrfField() ?>
+                                    <input type="hidden" name="action" value="toggle">
+                                    <input type="hidden" name="coach_id" value="<?= $c['id'] ?>">
+                                    <button type="submit"
+                                            class="btn btn-sm <?= $c['is_active'] ? 'btn-outline-warning' : 'btn-outline-success' ?>"
+                                            title="<?= $c['is_active'] ? 'Blokovat' : 'Aktivovat' ?>">
+                                        <i class="fas fa-<?= $c['is_active'] ? 'ban' : 'check' ?>"></i>
+                                    </button>
+                                </form>
+                                <!-- Smazání → potvrzovací stránka se zálohou -->
+                                <a href="<?= BASE_URL ?>/admin/coach_delete.php?id=<?= $c['id'] ?>"
+                                   class="btn btn-outline-danger btn-sm" title="Smazat">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php renderAdminFooter(); ?>

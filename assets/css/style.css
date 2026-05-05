@@ -1,0 +1,315 @@
+/* ============================================================
+   TrainerApp – Globální styly
+   ============================================================ */
+
+/* Zabránění horizontálního scrollu */
+html {
+    overflow-x: hidden;
+}
+
+/* Základní layout */
+body {
+    background-color: #f1f5f9;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+.container-fluid {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Navbar */
+.navbar-brand {
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+}
+
+/* Karty */
+.card {
+    border-radius: 12px;
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+    font-weight: 600;
+}
+
+/* Athlete card */
+.athlete-card {
+    border-radius: 14px;
+}
+
+.athlete-card .card-body {
+    padding: 1.25rem;
+}
+
+/* Tlačítka */
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.btn-warning {
+    color: #1a1a1a;
+}
+
+.btn-lg {
+    padding: 0.65rem 1.5rem;
+}
+
+/* Badge */
+.badge {
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+/* Tabulky */
+.table th {
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Formuláře */
+.form-control, .form-select {
+    border-radius: 8px;
+    border-color: #cbd5e1;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.2);
+}
+
+.form-label {
+    color: #374151;
+    font-size: 0.9rem;
+}
+
+/* Training session stránka */
+#exercise-card .card-header {
+    border-radius: 12px 12px 0 0;
+}
+
+/* Serie vstupy – výchozí šířka */
+.series-weight { width: 90px; }
+.series-reps   { width: 90px; }
+.series-assist { width: 80px; }
+
+/* Display number statistics */
+.display-6 {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+/* Login stránka */
+.login-page {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+    font-size: 0.8rem;
+}
+
+/* Alert */
+.alert {
+    border-radius: 10px;
+    border: none;
+}
+
+.alert-success { background: #dcfce7; color: #166534; }
+.alert-danger  { background: #fee2e2; color: #991b1b; }
+.alert-warning { background: #fef3c7; color: #92400e; }
+.alert-info    { background: #dbeafe; color: #1e40af; }
+
+/* List group */
+.list-group-item {
+    border-color: #e2e8f0;
+    padding: 0.75rem 1rem;
+    transition: background 0.15s ease;
+}
+
+.list-group-item:hover {
+    background: #f8fafc;
+}
+
+/* Modal */
+.modal-content {
+    border-radius: 14px;
+    border: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+    border-radius: 14px 14px 0 0;
+}
+
+/* Charts */
+canvas {
+    border-radius: 8px;
+}
+
+/* Statistika karty */
+.stat-card {
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+/* ================================================================
+   MOBILE RESPONSIVE
+   ================================================================ */
+
+/* Tablet a níže (< 768 px) */
+@media (max-width: 767.98px) {
+    .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    h2 { font-size: 1.25rem; }
+
+    .display-6 { font-size: 1.5rem; }
+
+    .table { font-size: 0.83rem; }
+
+    .series-weight, .series-reps, .series-assist { width: 75px; }
+}
+
+/* Mobil (< 576 px) */
+@media (max-width: 575.98px) {
+    .container-fluid {
+        padding-left: 0.65rem;
+        padding-right: 0.65rem;
+    }
+
+    /* Hlavička stránky: jméno + akční tlačítka pod sebe */
+    .page-header {
+        flex-wrap: wrap;
+        gap: 0.5rem !important;
+    }
+    .page-header > .ms-auto {
+        margin-left: 0 !important;
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    /* Tlačítko Ukončit trénink – přes celou šíři */
+    .training-finish-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Formulář pro přidání série – grid 3 sloupce + tlačítko přes celou řadu */
+    .add-series-row {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0.4rem;
+        align-items: end;
+    }
+    .add-series-row .add-series-btn-wrap {
+        grid-column: 1 / -1;
+    }
+    .add-series-row .add-series-btn-wrap .btn {
+        width: 100%;
+    }
+    .series-weight, .series-reps, .series-assist {
+        width: 100% !important;
+    }
+
+    /* Hlavička cviku v tréninku */
+    .card-header .fs-5 { font-size: 0.9rem !important; }
+    .card-header .badge.fs-5 { font-size: 0.78rem !important; }
+
+    /* Statistické hodnoty */
+    .display-6 { font-size: 1.3rem; }
+
+    /* Tabulky */
+    .table { font-size: 0.78rem; }
+    .table th, .table td { padding: 0.35rem 0.4rem; }
+
+    /* Tabulka historií sportovce – skrýt sloupec Místo */
+    .table-sessions th:nth-child(3),
+    .table-sessions td:nth-child(3) { display: none; }
+
+    /* Nadpisy */
+    h2 { font-size: 1.1rem; }
+    .fs-6 { font-size: 0.78rem !important; }
+
+    /* Modální okno */
+    .modal-dialog { margin: 0.4rem; }
+
+    /* Edit formulář cviku – vstup přes celou šíři */
+    .exercise-edit-form-input { min-width: 0 !important; width: 100%; }
+
+    /* Akční tlačítka v hlavičce tréninku */
+    .btn-lg {
+        font-size: 0.95rem;
+        padding: 0.5rem 1rem;
+    }
+}
+
+/* Print styly */
+@media print {
+    .navbar, .btn, footer, .modal, form[onsubmit],
+    [data-bs-toggle="modal"], #completeModal {
+        display: none !important;
+    }
+
+    body {
+        background: white;
+        font-size: 12px;
+    }
+
+    .card {
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+
+    .card-header.bg-dark {
+        background: #333 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: #f8f8f8 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* Animace načítání */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Barevné pruhy pro cviky v sadě */
+.exercise-block:nth-child(odd)  .card-header { background: #1e293b !important; }
+.exercise-block:nth-child(even) .card-header { background: #0f172a !important; }

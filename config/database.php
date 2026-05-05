@@ -1,0 +1,93 @@
+<?php
+// ============================================================
+// Konfigurace databáze
+// Upravte podle vašeho nastavení WAMP/MySQL
+// ============================================================
+
+if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
+if (!defined('DB_NAME'))    define('DB_NAME',    'marcelmiler');
+if (!defined('DB_USER'))    define('DB_USER',    'root');
+if (!defined('DB_PASS'))    define('DB_PASS',    '');
+if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
+
+function getDB(): PDO {
+    static $pdo = null;
+    if ($pdo === null) {
+        $dsn = sprintf(
+            'mysql:host=%s;dbname=%s;charset=%s',
+            DB_HOST, DB_NAME, DB_CHARSET
+        );
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+        try {
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            ensureSchemaUpgrades($pdo);
+        } catch (PDOException $e) {
+            $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+            die('<!DOCTYPE html><html lang="cs"><head><meta charset="UTF-8">
+                <title>Chyba DB</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+                </head><body class="bg-light"><div class="container mt-5">
+                <div class="alert alert-danger">
+                    <h4>Nelze se připojit k databázi</h4>
+                    <p>Zkontrolujte nastaveni v <code>config/env.php</code> dle <code>config/env.example.php</code> a ujistete se, ze databazovy server je dostupny.</p>
+                </div></div></body></html>');
+        }
+    }
+    return $pdo;
+}
+
+function ensureSchemaUpgrades(PDO $pdo): void {
+    // Kompatibilita: starší instalace měly u sportovce pouze sloupec "age".
+    // Nově používáme "birth_date" kvůli automatickému přepočtu věku.
+    $stmt = $pdo->query("SHOW COLUMNS FROM athletes LIKE 'birth_date'");
+    if (!$stmt->fetch()) {
+        $pdo->exec('ALTER TABLE athletes ADD COLUMN birth_date DATE NULL AFTER last_name');
+    }
+
+    // Foto sloupec pro cviky
+    $stmt2 = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'photo'");
+    if (!$stmt2->fetch()) {
+        $pdo->exec('ALTER TABLE exercises ADD COLUMN photo VARCHAR(255) NULL');
+    }
+
+    // Globální cviky mohou mít coach_id = NULL
+    $stmtCoachId = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'coach_id'");
+    $coachIdColumn = $stmtCoachId->fetch();
+    if ($coachIdColumn && strtoupper((string)($coachIdColumn['Null'] ?? 'NO')) !== 'YES') {
+        $pdo->exec('ALTER TABLE exercises MODIFY COLUMN coach_id INT NULL');
+    }
+
+    // Foto sloupec pro sportovce
+    $stmt3 = $pdo->query("SHOW COLUMNS FROM athletes LIKE 'photo'");
+    if (!$stmt3->fetch()) {
+        $pdo->exec('ALTER TABLE athletes ADD COLUMN photo VARCHAR(255) NULL');
+    }
+
+    // Tabulka superadministrátorů
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `superadmins` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `username`   VARCHAR(100) NOT NULL UNIQUE,
+            `password`   VARCHAR(255) NOT NULL,
+            `name`       VARCHAR(200),
+            `email`      VARCHAR(255),
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Aktivní stav trenéra (superadmin může zablokovat)
+    $stmtAct = $pdo->query("SHOW COLUMNS FROM coaches LIKE 'is_active'");
+    if (!$stmtAct->fetch()) {
+        $pdo->exec('ALTER TABLE coaches ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1');
+    }
+
+    // Globální cviky (is_global = 1 = viditelné všem trenérům, spravuje superadmin)
+    $stmtGlob = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'is_global'");
+    if (!$stmtGlob->fetch()) {
+        $pdo->exec('ALTER TABLE exercises ADD COLUMN is_global TINYINT(1) NOT NULL DEFAULT 0');
+    }
+}

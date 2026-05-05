@@ -1,0 +1,302 @@
+<?php
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/header.php';
+
+requireLogin();
+
+$coachId   = getCurrentCoachId();
+$athleteId = intParam($_GET, 'athlete_id');
+$pdo       = getDB();
+
+// Ověření sportovce
+$stmt = $pdo->prepare('SELECT * FROM athletes WHERE id = ? AND coach_id = ?');
+$stmt->execute([$athleteId, $coachId]);
+$athlete = $stmt->fetch();
+
+if (!$athlete) {
+    flash('danger', 'Sportovec nenalezen.');
+    redirect(BASE_URL . '/dashboard.php');
+}
+
+// Načtení cviků pro výběr filtru
+$stmtEx = $pdo->prepare(
+    'SELECT DISTINCT e.id, e.name
+     FROM exercises e
+     JOIN session_series ss ON ss.exercise_id = e.id
+     JOIN training_sessions ts ON ss.session_id = ts.id
+     WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+     ORDER BY e.name'
+);
+$stmtEx->execute([$athleteId]);
+$exercises = $stmtEx->fetchAll();
+
+// Vybraný cvik pro graf
+$selectedExId = intParam($_GET, 'exercise_id');
+if (!$selectedExId && !empty($exercises)) {
+    $selectedExId = $exercises[0]['id'];
+}
+
+// Data pro graf (max váha a průměrný objem na session)
+$chartData = [];
+if ($selectedExId) {
+    $stmtData = $pdo->prepare(
+        'SELECT ts.completed_at AS session_date,
+                ws.name AS set_name,
+                MAX(ss.weight) AS max_weight,
+                SUM(ss.weight * ss.reps) AS total_volume,
+                MAX(ss.reps) AS max_reps,
+                SUM(ss.reps) AS total_reps,
+                COUNT(ss.id) AS series_count
+         FROM session_series ss
+         JOIN training_sessions ts ON ss.session_id = ts.id
+         JOIN workout_sets ws ON ts.workout_set_id = ws.id
+         WHERE ts.athlete_id = ? AND ss.exercise_id = ? AND ts.completed_at IS NOT NULL
+         GROUP BY ts.id
+         ORDER BY ts.completed_at ASC'
+    );
+    $stmtData->execute([$athleteId, $selectedExId]);
+    $chartData = $stmtData->fetchAll();
+}
+
+// Název vybraného cviku
+$selectedExName = '';
+foreach ($exercises as $ex) {
+    if ($ex['id'] == $selectedExId) {
+        $selectedExName = $ex['name'];
+        break;
+    }
+}
+
+renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name']), true);
+?>
+
+<div class="d-flex align-items-center mb-4 gap-3">
+    <a href="<?= BASE_URL ?>/athlete_detail.php?id=<?= $athleteId ?>"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i>
+    </a>
+    <h2 class="mb-0 fw-bold">
+        <i class="fas fa-chart-line me-2 text-warning"></i>
+        <?= h($athlete['first_name'] . ' ' . $athlete['last_name']) ?> – Pokrok
+    </h2>
+</div>
+
+<?php if (empty($exercises)): ?>
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="fas fa-chart-bar fa-3x mb-3 d-block"></i>
+        Žádná data. Nejprve dokončete nějaký trénink.
+    </div>
+</div>
+<?php else: ?>
+
+<!-- Výběr cviku -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+            <input type="hidden" name="athlete_id" value="<?= $athleteId ?>">
+            <div>
+                <label class="form-label fw-semibold mb-1">Vyberte cvik</label>
+                <select name="exercise_id" class="form-select" onchange="this.form.submit()">
+                    <?php foreach ($exercises as $ex): ?>
+                    <option value="<?= $ex['id'] ?>" <?= $ex['id'] == $selectedExId ? 'selected' : '' ?>>
+                        <?= h($ex['name']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if (!empty($chartData)): ?>
+
+<!-- Statistika -->
+<?php
+$allWeights = array_column($chartData, 'max_weight');
+$maxEver    = max($allWeights);
+$lastRow    = end($chartData);
+$firstRow   = reset($chartData);
+$improvement = $maxEver > 0 && $firstRow['max_weight'] > 0
+    ? round(($lastRow['max_weight'] - $firstRow['max_weight']) / $firstRow['max_weight'] * 100, 1)
+    : 0;
+?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= number_format($maxEver, 1, ',', '') ?></div>
+            <div class="text-muted">Rekord váha (kg)</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= max(array_column($chartData, 'max_reps')) ?></div>
+            <div class="text-muted">Max opakování</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold <?= $improvement >= 0 ? 'text-success' : 'text-danger' ?>">
+                <?= ($improvement >= 0 ? '+' : '') . $improvement ?> %
+            </div>
+            <div class="text-muted">Zlepšení (první vs. poslední)</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= count($chartData) ?></div>
+            <div class="text-muted">Tréninků s tímto cvikem</div>
+        </div>
+    </div>
+</div>
+
+<!-- Graf maximální váhy -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-chart-line me-2 text-warning"></i>
+        Maximální váha – <?= h($selectedExName) ?>
+    </div>
+    <div class="card-body">
+        <canvas id="weightChart" style="max-height:350px"></canvas>
+    </div>
+</div>
+
+<!-- Graf objemu -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-chart-bar me-2 text-warning"></i>
+        Celkový objem na trénink (kg × opak.) – <?= h($selectedExName) ?>
+    </div>
+    <div class="card-body">
+        <canvas id="volumeChart" style="max-height:300px"></canvas>
+    </div>
+</div>
+
+<!-- Tabulka dat -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-table me-2"></i>Detailní data
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered mb-0 align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Datum</th>
+                        <th>Sada</th>
+                        <th>Max váha (kg)</th>
+                        <th>Max opak.</th>
+                        <th>Počet sérií</th>
+                        <th>Celk. objem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach (array_reverse($chartData) as $i => $row): ?>
+                    <tr>
+                        <td class="text-muted"><?= count($chartData) - $i ?></td>
+                        <td><?= formatDate($row['session_date']) ?></td>
+                        <td><span class="badge bg-secondary"><?= h($row['set_name']) ?></span></td>
+                        <td class="fw-bold"><?= number_format($row['max_weight'], 1, ',', '') ?> kg</td>
+                        <td><?= $row['max_reps'] ?></td>
+                        <td><?= $row['series_count'] ?></td>
+                        <td><?= number_format($row['total_volume'], 0, ',', '') ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const labels  = <?= json_encode(array_map(fn($r) => formatDateJS($r['session_date']), $chartData)) ?>;
+const weights = <?= json_encode(array_map(fn($r) => (float)$r['max_weight'], $chartData)) ?>;
+const volumes = <?= json_encode(array_map(fn($r) => (float)$r['total_volume'], $chartData)) ?>;
+const sady    = <?= json_encode(array_map(fn($r) => $r['set_name'], $chartData)) ?>;
+
+function formatDateJS(dt) {
+    const d = new Date(dt);
+    return d.toLocaleDateString('cs-CZ', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+// Graf váhy
+new Chart(document.getElementById('weightChart'), {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Max váha (kg)',
+            data: weights,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderWidth: 3,
+            pointBackgroundColor: '#f59e0b',
+            pointRadius: 5,
+            pointHoverRadius: 8,
+            tension: 0.3,
+            fill: true,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => `${ctx.parsed.y.toFixed(1).replace('.',',')} kg  |  Sada: ${sady[ctx.dataIndex]}`
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: false,
+                ticks: { callback: v => v + ' kg' }
+            }
+        }
+    }
+});
+
+// Graf objemu
+new Chart(document.getElementById('volumeChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Objem (kg×rep)',
+            data: volumes,
+            backgroundColor: 'rgba(59,130,246,0.7)',
+            borderColor: '#3b82f6',
+            borderWidth: 2,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { callback: v => v.toLocaleString('cs-CZ') }
+            }
+        }
+    }
+});
+</script>
+
+<?php else: ?>
+<div class="alert alert-info">Pro tento cvik zatím nejsou žádná data.</div>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php
+// Pomocná funkce pro JS – není potřeba v PHP, jen pro formátování JS data
+function formatDateJS(string $dt): string {
+    return date('d.m.Y', strtotime($dt));
+}
+?>
+
+<?php renderFooter(); ?>
