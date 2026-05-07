@@ -17,7 +17,7 @@ function renderAdminHeader(string $title = ''): void {
 	<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
 	<style>
 		.admin-badge { background: linear-gradient(135deg,#7c3aed,#4f46e5); }
-		.sidebar { min-height: calc(100vh - 56px); background:#1e1e2e; }
+		.sidebar { background:#1e1e2e; }
 		.sidebar .nav-link { color: #a0aec0; border-radius: 6px; margin-bottom: 2px; }
 		.sidebar .nav-link:hover, .sidebar .nav-link.active { background:#312e81; color:#fff; }
 		.sidebar .nav-link i { width: 20px; }
