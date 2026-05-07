@@ -40,7 +40,7 @@ renderHeader('Dashboard');
     <h2 class="mb-0"><i class="fas fa-users me-2 text-warning"></i>Moji sportovci</h2>
     <div class="d-flex gap-2 flex-wrap">
         <?php if (count($athletes) >= 2): ?>
-        <a href="<?= BASE_URL ?>/training_paired_start.php" class="btn btn-outline-warning btn-sm fw-bold">
+        <a href="<?= BASE_URL ?>/training_paired_start.php" class="btn btn-warning btn-sm fw-bold">
             <i class="fas fa-people-group me-1"></i>Párový trénink
         </a>
         <?php endif; ?>

@@ -328,6 +328,11 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                                             <?php else: ?>
                                             <span class="badge bg-warning text-dark">Probíhá</span>
                                             <?php endif; ?>
+                                            <?php if ($s['paired_session_id']): ?>
+                                            <span class="badge bg-info text-dark mt-1">
+                                                <i class="fas fa-people-group me-1"></i>Párový
+                                            </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="text-center">
                                             <?php if (!empty($s['training_photo'])): ?>
@@ -336,13 +341,18 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                                                 <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
                                                      alt="foto"
                                                      style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
-                                            </a>
-                                            <?php else: ?>
-                                            <span class="text-muted">–</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="text-end">
-                                            <?php if (!$s['completed_at']): ?>
+                                            <td>
+                                                <?php if ($s['completed_at']): ?>
+                                                <span class="badge bg-success">Dokončeno</span>
+                                                <?php else: ?>
+                                                <span class="badge bg-warning text-dark">Probíhá</span>
+                                                <?php endif; ?>
+                                                <?php if ($s['paired_session_id']): ?>
+                                                <span class="badge bg-info text-dark mt-1">
+                                                    <i class="fas fa-people-group me-1"></i>Párový
+                                                </span>
+                                                <?php endif; ?>
+                                            </td>
                                             <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
                                                class="btn btn-warning btn-sm">
                                                 <i class="fas fa-play me-1"></i>Pokračovat

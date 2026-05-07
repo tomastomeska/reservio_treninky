@@ -54,6 +54,11 @@ renderHeader('Detail tréninku');
             <?= $athleteName ?>
         </h2>
         <span class="badge bg-warning text-dark me-1"><?= h($session['set_name']) ?></span>
+        <?php if ($session['paired_session_id']): ?>
+        <span class="badge bg-info text-dark me-1">
+            <i class="fas fa-people-group me-1"></i>Párový trénink
+        </span>
+        <?php endif; ?>
         <?= formatDateTime($session['completed_at'] ?? $session['started_at']) ?>
         <?php if ($session['location']): ?>
         <span class="ms-2 text-muted"><i class="fas fa-map-marker-alt me-1"></i><?= h($session['location']) ?></span>
