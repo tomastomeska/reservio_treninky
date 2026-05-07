@@ -48,7 +48,7 @@ function renderAdminHeader(string $title = ''): void {
 </nav>
 
 <div class="container-fluid">
-<div class="row">
+<div class="row flex-nowrap">
 	<!-- Sidebar -->
 	<div class="col-auto p-0" style="width:220px">
 		<div class="sidebar p-3">
@@ -86,7 +86,7 @@ function renderAdminHeader(string $title = ''): void {
 	</div>
 
 	<!-- Hlavní obsah -->
-	<div class="col p-4">
+	<div class="col p-4" style="min-width:0;">
 <?php if ($flash): ?>
 <div class="alert alert-<?= h($flash['type']) ?> alert-dismissible fade show" role="alert">
 	<?= $flash['message'] ?>
