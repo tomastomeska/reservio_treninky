@@ -52,9 +52,11 @@ foreach ($sessions as $s) {
 
 // Sady dostupné pro trénink (pro dropdown "Spustit trénink")
 $stmtSets = $pdo->prepare(
-    'SELECT ws.*, COUNT(wse.id) AS exercise_count
+    'SELECT ws.*, COUNT(wse.id) AS exercise_count,
+            GROUP_CONCAT(e.name ORDER BY wse.exercise_order SEPARATOR ", ") AS exercise_names
      FROM workout_sets ws
      LEFT JOIN workout_set_exercises wse ON ws.id = wse.workout_set_id
+     LEFT JOIN exercises e ON e.id = wse.exercise_id
      WHERE ws.coach_id = ?
      GROUP BY ws.id
      ORDER BY ws.name'
@@ -181,6 +183,9 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                             <option value="<?= $ws['id'] ?>">
                                 <?= h($ws['name']) ?>
                                 (<?= $ws['exercise_count'] ?> <?= $ws['exercise_count'] === 1 ? 'cvik' : ($ws['exercise_count'] < 5 ? 'cviky' : 'cviků') ?>)
+                                <?php if (!empty($ws['exercise_names'])): ?>
+                                    – <?= h($ws['exercise_names']) ?>
+                                <?php endif; ?>
                             </option>
                             <?php endforeach; ?>
                         </select>

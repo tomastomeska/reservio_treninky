@@ -39,10 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action   = $_POST['action'] ?? '';
     $coachId  = intParam($_POST, 'coach_id');
     $athleteId = intParam($_POST, 'athlete_id');
+    $workoutSetId = intParam($_POST, 'workout_set_id');
 
     if ($action === 'export_template') {
-        if ($coachId <= 0 || $athleteId <= 0) {
-            flash('danger', 'Vyberte trenéra i sportovce.');
+        if ($coachId <= 0 || $athleteId <= 0 || $workoutSetId <= 0) {
+            flash('danger', 'Vyberte trenéra, sportovce i sadu.');
             redirect(BASE_URL . '/admin/training_bulk.php');
         }
 
@@ -68,20 +69,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              FROM workout_sets ws
              JOIN workout_set_exercises wse ON wse.workout_set_id = ws.id
              JOIN exercises e ON e.id = wse.exercise_id
-             WHERE ws.coach_id = ?
-             ORDER BY ws.name, wse.exercise_order'
+             WHERE ws.coach_id = ? AND ws.id = ?
+             ORDER BY wse.exercise_order'
         );
-        $stmt->execute([$coachId]);
+        $stmt->execute([$coachId, $workoutSetId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($rows)) {
-            flash('warning', 'Trenér nemá žádné sady s cviky pro export.');
+            flash('warning', 'Vybraná sada nemá žádné cviky nebo nepatří pod vybraného trenéra.');
             redirect(BASE_URL . '/admin/training_bulk.php');
         }
 
+        $today = date('Y-m-d');
         $filename = 'treningy_template_' .
             preg_replace('/\s+/', '_', $athlete['last_name'] . '_' . $athlete['first_name']) .
-            '_' . date('Y-m-d') . '.csv';
+            '_' . preg_replace('/\s+/', '_', $rows[0]['workout_set_name']) .
+            '_' . $today . '.csv';
 
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -91,33 +94,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fputcsv($out, [
             'datum_treninku',
             'misto',
-            'poznamka',
             'sada_id',
             'sada_nazev',
             'cvik_id',
-            'poradi_cviku',
             'cvik_nazev',
             'serie',
             'vaha',
             'opakovani',
             'dopomoc',
+            'poznamka',
         ], ';');
 
         foreach ($rows as $r) {
-            fputcsv($out, [
-                '',
-                '',
-                '',
-                $r['workout_set_id'],
-                $r['workout_set_name'],
-                $r['exercise_id'],
-                $r['exercise_order'],
-                $r['exercise_name'],
-                1,
-                '',
-                '',
-                0,
-            ], ';');
+            for ($series = 1; $series <= 4; $series++) {
+                fputcsv($out, [
+                    $today,
+                    '',
+                    $r['workout_set_id'],
+                    $r['workout_set_name'],
+                    $r['exercise_id'],
+                    $r['exercise_name'],
+                    $series,
+                    '',
+                    '',
+                    '',
+                    '',
+                ], ';');
+            }
         }
 
         fclose($out);
@@ -125,8 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'import_csv') {
-        if ($coachId <= 0 || $athleteId <= 0) {
-            $errors[] = 'Vyberte trenéra i sportovce.';
+        if ($coachId <= 0 || $athleteId <= 0 || $workoutSetId <= 0) {
+            $errors[] = 'Vyberte trenéra, sportovce i sadu.';
         }
 
         $stmtAth = $pdo->prepare(
@@ -148,9 +151,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'SELECT ws.id AS workout_set_id, wse.exercise_id
                  FROM workout_sets ws
                  JOIN workout_set_exercises wse ON wse.workout_set_id = ws.id
-                 WHERE ws.coach_id = ?'
+                                 WHERE ws.coach_id = ? AND ws.id = ?'
             );
-            $validMapStmt->execute([$coachId]);
+                        $validMapStmt->execute([$coachId, $workoutSetId]);
             $validMapRows = $validMapStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $validExercisesBySet = [];
@@ -247,12 +250,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $weight = (float)str_replace(',', '.', (string)($row[$idx['weight']] ?? '0'));
                         $reps = (int)($row[$idx['reps']] ?? 0);
                         $assist = (int)($row[$idx['assist']] ?? 0);
-                        $location = trim((string)($idx['location'] ?? null) !== null
-                            ? ($row[$idx['location']] ?? '')
-                            : '');
-                        $notes = trim((string)($idx['notes'] ?? null) !== null
-                            ? ($row[$idx['notes']] ?? '')
-                            : '');
+                        $location = $idx['location'] !== null
+                            ? trim((string)($row[$idx['location']] ?? ''))
+                            : '';
+                        $notes = $idx['notes'] !== null
+                            ? trim((string)($row[$idx['notes']] ?? ''))
+                            : '';
 
                         if (!$date) {
                             $errors[] = 'Řádek ' . $lineNo . ': neplatné datum.';
@@ -264,7 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $errors[] = 'Řádek ' . $lineNo . ': cvik nepatří do uvedené sady.';
                         }
                         if ($seriesOrder <= 0) {
-                            $errors[] = 'Řádek ' . $lineNo . ': series_order musí být >= 1.';
+                            $errors[] = 'Řádek ' . $lineNo . ': série musí být >= 1.';
                         }
                         if ($weight < 0 || $reps < 0 || $assist < 0) {
                             $errors[] = 'Řádek ' . $lineNo . ': váha/opakování/dopomoc nesmí být záporné.';
@@ -378,7 +381,7 @@ renderAdminHeader('Hromadný import/export tréninků');
         <h2 class="mb-0 fw-bold">
             <i class="fas fa-file-csv me-2" style="color:#a78bfa"></i>Hromadný import/export tréninků
         </h2>
-        <div class="text-muted small">Vyber trenéra a sportovce, stáhni CSV šablonu, uprav více tréninků a naimportuj zpět.</div>
+        <div class="text-muted small">Vyber trenéra, sportovce a sadu, stáhni CSV šablonu, doplň výsledky a naimportuj zpět.</div>
     </div>
     <a href="<?= BASE_URL ?>/admin/training_add.php" class="btn btn-outline-secondary btn-sm">
         <i class="fas fa-pen me-1"></i>Ruční zadání tréninku
@@ -394,7 +397,7 @@ renderAdminHeader('Hromadný import/export tréninků');
 
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-dark text-white fw-semibold">
-            <i class="fas fa-filter me-2" style="color:#a78bfa"></i>Výběr trenéra a sportovce
+            <i class="fas fa-filter me-2" style="color:#a78bfa"></i>Výběr trenéra, sportovce a sady
         </div>
         <div class="card-body">
             <div class="row g-3">
@@ -415,6 +418,12 @@ renderAdminHeader('Hromadný import/export tréninků');
                         <option value="">— Nejdříve vyberte trenéra —</option>
                     </select>
                 </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">Sada</label>
+                    <select class="form-select" id="setSelect" name="workout_set_id" required disabled>
+                        <option value="">— Nejdříve vyberte trenéra —</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -427,8 +436,8 @@ renderAdminHeader('Hromadný import/export tréninků');
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="text-muted small mb-3">
-                        Stáhne CSV se všemi cviky ze sad trenéra. Do souboru doplň hlavně sloupce
-                        datum_treninku, vaha, opakovani a případně misto/poznamka.
+                        Stáhne CSV jen pro vybranou sadu sportovce. U každého cviku připraví 4 řádky (série)
+                        a předvyplní aktuální datum. Doplň hlavně váhu, opakování a dopomoc.
                     </p>
                     <button type="submit" name="action" value="export_template" class="btn btn-outline-success mt-auto">
                         <i class="fas fa-file-arrow-down me-1"></i>Stáhnout CSV šablonu
@@ -446,8 +455,8 @@ renderAdminHeader('Hromadný import/export tréninků');
                     <label class="form-label fw-semibold">CSV soubor</label>
                     <input type="file" class="form-control mb-3" name="csv" accept=".csv,text/csv">
                     <div class="text-muted small mb-3">
-                        CSV musí mít hlavičku z exportu. Jeden řádek = jedna série. 
-                        Import umí vytvořit více tréninků najednou.
+                        Nahraj CSV vytvořené z této šablony. Jeden řádek = jedna série.
+                        Místo a poznámku můžeš nechat prázdné.
                     </div>
                     <button type="submit" name="action" value="import_csv" class="btn btn-warning fw-bold mt-auto">
                         <i class="fas fa-file-import me-1"></i>Importovat tréninky
@@ -462,6 +471,7 @@ renderAdminHeader('Hromadný import/export tréninků');
 const BASE_URL = '<?= BASE_URL ?>';
 const coachSelect = document.getElementById('coachSelect');
 const athleteSelect = document.getElementById('athleteSelect');
+const setSelect = document.getElementById('setSelect');
 
 async function loadAthletes(coachId) {
     athleteSelect.innerHTML = '<option value="">Načítám…</option>';
@@ -489,10 +499,40 @@ async function loadAthletes(coachId) {
     athleteSelect.disabled = false;
 }
 
+async function loadSets(coachId) {
+    setSelect.innerHTML = '<option value="">Načítám…</option>';
+    setSelect.disabled = true;
+
+    if (!coachId) {
+        setSelect.innerHTML = '<option value="">— Nejdříve vyberte trenéra —</option>';
+        return;
+    }
+
+    const resp = await fetch(BASE_URL + '/admin/training_api.php?action=sets&coach_id=' + encodeURIComponent(coachId));
+    if (!resp.ok) {
+        setSelect.innerHTML = '<option value="">— Chyba načtení —</option>';
+        return;
+    }
+
+    const sets = await resp.json();
+    setSelect.innerHTML = '<option value="">— Vyberte sadu —</option>';
+    sets.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = s.name;
+        setSelect.appendChild(option);
+    });
+    setSelect.disabled = false;
+}
+
 coachSelect.addEventListener('change', () => {
     loadAthletes(coachSelect.value).catch(() => {
         athleteSelect.innerHTML = '<option value="">— Chyba načtení —</option>';
         athleteSelect.disabled = true;
+    });
+    loadSets(coachSelect.value).catch(() => {
+        setSelect.innerHTML = '<option value="">— Chyba načtení —</option>';
+        setSelect.disabled = true;
     });
 });
 </script>
