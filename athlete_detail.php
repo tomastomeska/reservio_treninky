@@ -202,8 +202,18 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
 
 <!-- Historie tréninků -->
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="fas fa-history me-2"></i>Historie tréninků</span>
+        <?php if (!empty($sessions)): ?>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-light btn-sm" id="toggleSelectTrainings">
+                <i class="fas fa-check-square me-1"></i>Označit vše
+            </button>
+            <button type="submit" form="bulkDeleteTrainingsForm" class="btn btn-danger btn-sm fw-bold" id="bulkDeleteBtn" disabled>
+                <i class="fas fa-trash me-1"></i>Smazat vybrané
+            </button>
+        </div>
+        <?php endif; ?>
     </div>
     <div class="card-body p-0">
         <?php if (empty($sessions)): ?>
@@ -211,136 +221,130 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
             <i class="fas fa-inbox fa-2x mb-2"></i><br>Zatím žádné tréninky.
         </div>
         <?php else: ?>
-        <div class="p-3 border-bottom bg-light">
-            <strong>Aktuální měsíc (<?= date('m/Y') ?>)</strong>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle table-sessions">
-                <thead class="table-light">
-                    <tr>
-                        <th>Datum</th>
-                        <th>Sada</th>
-                        <th>Místo</th>
-                        <th class="text-center">Sérií</th>
-                        <th>Stav</th>
-                        <th class="text-center" title="Fotografie"><i class="fas fa-camera"></i></th>
-                        <th class="text-end">Akce</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($currentMonthSessions)): ?>
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-4">V aktuálním měsíci zatím nejsou žádné tréninky.</td>
-                    </tr>
-                    <?php endif; ?>
-                    <?php foreach ($currentMonthSessions as $s): ?>
-                    <tr>
-                        <td>
-                            <strong><?= formatDate($s['started_at']) ?></strong>
-                            <br><small class="text-muted"><?= date('H:i', strtotime($s['started_at'])) ?></small>
-                        </td>
-                        <td><span class="badge bg-secondary fs-6"><?= h($s['set_name']) ?></span></td>
-                        <td class="text-muted"><?= $s['location'] ? h($s['location']) : '–' ?></td>
-                        <td class="text-center"><?= $s['total_series'] ?></td>
-                        <td>
-                            <?php if ($s['completed_at']): ?>
-                            <span class="badge bg-success">Dokončeno</span>
-                            <?php else: ?>
-                            <span class="badge bg-warning text-dark">Probíhá</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="text-center">
-                            <?php if (!empty($s['training_photo'])): ?>
-                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
-                               title="Zobrazit fotografii">
-                                <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
-                                     alt="foto"
-                                     style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
-                            </a>
-                            <?php else: ?>
-                            <span class="text-muted">–</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="text-end">
-                            <?php if (!$s['completed_at']): ?>
-                            <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
-                               class="btn btn-warning btn-sm">
-                                <i class="fas fa-play me-1"></i>Pokračovat
-                            </a>
-                            <?php else: ?>
-                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>"
-                               class="btn btn-outline-dark btn-sm">
-                                <i class="fas fa-eye me-1"></i>Detail
-                            </a>
-                            <?php endif; ?>
-                            <form method="post" action="<?= BASE_URL ?>/training_delete.php" class="d-inline"
-                                  onsubmit="return confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.');">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="session_id" value="<?= (int)$s['id'] ?>">
-                                <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . $athleteId) ?>">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Smazat trénink">
+        <form method="post" action="<?= BASE_URL ?>/training_delete.php" id="bulkDeleteTrainingsForm" onsubmit="return confirmBulkDeleteTrainings();">
+            <?= csrfField() ?>
+            <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . $athleteId) ?>">
+
+            <div class="p-3 border-bottom bg-light">
+                <strong>Aktuální měsíc (<?= date('m/Y') ?>)</strong>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle table-sessions" id="currentMonthTrainingsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width:42px;">
+                                <input class="form-check-input" type="checkbox" id="checkAllCurrent">
+                            </th>
+                            <th>Datum</th>
+                            <th>Sada</th>
+                            <th>Místo</th>
+                            <th class="text-center">Sérií</th>
+                            <th>Stav</th>
+                            <th class="text-center" title="Fotografie"><i class="fas fa-camera"></i></th>
+                            <th class="text-end">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($currentMonthSessions)): ?>
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">V aktuálním měsíci zatím nejsou žádné tréninky.</td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php foreach ($currentMonthSessions as $s): ?>
+                        <tr>
+                            <td class="text-center">
+                                <input class="form-check-input training-bulk-check" type="checkbox" name="session_ids[]" value="<?= (int)$s['id'] ?>">
+                            </td>
+                            <td>
+                                <strong><?= formatDate($s['started_at']) ?></strong>
+                                <br><small class="text-muted"><?= date('H:i', strtotime($s['started_at'])) ?></small>
+                            </td>
+                            <td><span class="badge bg-secondary fs-6"><?= h($s['set_name']) ?></span></td>
+                            <td class="text-muted"><?= $s['location'] ? h($s['location']) : '–' ?></td>
+                            <td class="text-center"><?= $s['total_series'] ?></td>
+                            <td>
+                                <?php if ($s['completed_at']): ?>
+                                <span class="badge bg-success">Dokončeno</span>
+                                <?php else: ?>
+                                <span class="badge bg-warning text-dark">Probíhá</span>
+                                <?php endif; ?>
+                                <?php if ($s['paired_session_id']): ?>
+                                <span class="badge bg-info text-dark mt-1">
+                                    <i class="fas fa-people-group me-1"></i>Párový
+                                </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <?php if (!empty($s['training_photo'])): ?>
+                                <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
+                                   title="Zobrazit fotografii">
+                                    <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
+                                         alt="foto"
+                                         style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
+                                </a>
+                                <?php else: ?>
+                                <span class="text-muted">–</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end">
+                                <?php if (!$s['completed_at']): ?>
+                                <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
+                                   class="btn btn-warning btn-sm">
+                                    <i class="fas fa-play me-1"></i>Pokračovat
+                                </a>
+                                <?php else: ?>
+                                <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>"
+                                   class="btn btn-outline-dark btn-sm">
+                                    <i class="fas fa-eye me-1"></i>Detail
+                                </a>
+                                <?php endif; ?>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="deleteSingleTraining(<?= (int)$s['id'] ?>)" title="Smazat trénink">
                                     <i class="fas fa-trash"></i>
                                 </button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
 
-        <?php if (!empty($olderSessionsByMonth)): ?>
-        <div class="accordion" id="olderMonthsAccordion">
-            <?php $monthIdx = 0; ?>
-            <?php foreach ($olderSessionsByMonth as $monthKey => $monthSessions): ?>
-            <?php
-            $monthIdx++;
-            $accId = 'month-' . $monthIdx;
-            $monthLabel = date('m/Y', strtotime($monthSessions[0]['started_at']));
-            ?>
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="heading-<?= $accId ?>">
-                    <button class="accordion-button collapsed" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#collapse-<?= $accId ?>"
-                            aria-expanded="false" aria-controls="collapse-<?= $accId ?>">
-                        <?= h($monthLabel) ?>
-                        <span class="badge bg-secondary ms-2"><?= count($monthSessions) ?></span>
-                    </button>
-                </h2>
-                <div id="collapse-<?= $accId ?>" class="accordion-collapse collapse"
-                     aria-labelledby="heading-<?= $accId ?>" data-bs-parent="#olderMonthsAccordion">
-                    <div class="accordion-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle table-sessions">
-                                <tbody>
-                                    <?php foreach ($monthSessions as $s): ?>
-                                    <tr>
-                                        <td>
-                                            <strong><?= formatDate($s['started_at']) ?></strong>
-                                            <br><small class="text-muted"><?= date('H:i', strtotime($s['started_at'])) ?></small>
-                                        </td>
-                                        <td><span class="badge bg-secondary fs-6"><?= h($s['set_name']) ?></span></td>
-                                        <td class="text-muted"><?= $s['location'] ? h($s['location']) : '–' ?></td>
-                                        <td class="text-center"><?= $s['total_series'] ?></td>
-                                        <td>
-                                            <?php if ($s['completed_at']): ?>
-                                            <span class="badge bg-success">Dokončeno</span>
-                                            <?php else: ?>
-                                            <span class="badge bg-warning text-dark">Probíhá</span>
-                                            <?php endif; ?>
-                                            <?php if ($s['paired_session_id']): ?>
-                                            <span class="badge bg-info text-dark mt-1">
-                                                <i class="fas fa-people-group me-1"></i>Párový
-                                            </span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="text-center">
-                                            <?php if (!empty($s['training_photo'])): ?>
-                                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
-                                               title="Zobrazit fotografii">
-                                                <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
-                                                     alt="foto"
-                                                     style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
+            <?php if (!empty($olderSessionsByMonth)): ?>
+            <div class="accordion" id="olderMonthsAccordion">
+                <?php $monthIdx = 0; ?>
+                <?php foreach ($olderSessionsByMonth as $monthKey => $monthSessions): ?>
+                <?php
+                $monthIdx++;
+                $accId = 'month-' . $monthIdx;
+                $monthLabel = date('m/Y', strtotime($monthSessions[0]['started_at']));
+                ?>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading-<?= $accId ?>">
+                        <button class="accordion-button collapsed" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#collapse-<?= $accId ?>"
+                                aria-expanded="false" aria-controls="collapse-<?= $accId ?>">
+                            <?= h($monthLabel) ?>
+                            <span class="badge bg-secondary ms-2"><?= count($monthSessions) ?></span>
+                        </button>
+                    </h2>
+                    <div id="collapse-<?= $accId ?>" class="accordion-collapse collapse"
+                         aria-labelledby="heading-<?= $accId ?>" data-bs-parent="#olderMonthsAccordion">
+                        <div class="accordion-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 align-middle table-sessions">
+                                    <tbody>
+                                        <?php foreach ($monthSessions as $s): ?>
+                                        <tr>
+                                            <td class="text-center" style="width:42px;">
+                                                <input class="form-check-input training-bulk-check" type="checkbox" name="session_ids[]" value="<?= (int)$s['id'] ?>">
+                                            </td>
+                                            <td>
+                                                <strong><?= formatDate($s['started_at']) ?></strong>
+                                                <br><small class="text-muted"><?= date('H:i', strtotime($s['started_at'])) ?></small>
+                                            </td>
+                                            <td><span class="badge bg-secondary fs-6"><?= h($s['set_name']) ?></span></td>
+                                            <td class="text-muted"><?= $s['location'] ? h($s['location']) : '–' ?></td>
+                                            <td class="text-center"><?= $s['total_series'] ?></td>
                                             <td>
                                                 <?php if ($s['completed_at']): ?>
                                                 <span class="badge bg-success">Dokončeno</span>
@@ -353,39 +357,134 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                                                 </span>
                                                 <?php endif; ?>
                                             </td>
-                                            <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
-                                               class="btn btn-warning btn-sm">
-                                                <i class="fas fa-play me-1"></i>Pokračovat
-                                            </a>
-                                            <?php else: ?>
-                                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>"
-                                               class="btn btn-outline-dark btn-sm">
-                                                <i class="fas fa-eye me-1"></i>Detail
-                                            </a>
-                                            <?php endif; ?>
-                                            <form method="post" action="<?= BASE_URL ?>/training_delete.php" class="d-inline"
-                                                  onsubmit="return confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.');">
-                                                <?= csrfField() ?>
-                                                <input type="hidden" name="session_id" value="<?= (int)$s['id'] ?>">
-                                                <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . $athleteId) ?>">
-                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Smazat trénink">
+                                            <td class="text-center">
+                                                <?php if (!empty($s['training_photo'])): ?>
+                                                <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
+                                                   title="Zobrazit fotografii">
+                                                    <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
+                                                         alt="foto"
+                                                         style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
+                                                </a>
+                                                <?php else: ?>
+                                                <span class="text-muted">–</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-end">
+                                                <?php if (!$s['completed_at']): ?>
+                                                <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
+                                                   class="btn btn-warning btn-sm">
+                                                    <i class="fas fa-play me-1"></i>Pokračovat
+                                                </a>
+                                                <?php else: ?>
+                                                <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>"
+                                                   class="btn btn-outline-dark btn-sm">
+                                                    <i class="fas fa-eye me-1"></i>Detail
+                                                </a>
+                                                <?php endif; ?>
+                                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                                        onclick="deleteSingleTraining(<?= (int)$s['id'] ?>)" title="Smazat trénink">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
+            <?php endif; ?>
+        </form>
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+let forceSingleDeleteSubmit = false;
+
+function getTrainingChecks() {
+    return Array.from(document.querySelectorAll('.training-bulk-check'));
+}
+
+function updateBulkDeleteButtonState() {
+    const deleteBtn = document.getElementById('bulkDeleteBtn');
+    if (!deleteBtn) return;
+    const selected = getTrainingChecks().filter((el) => el.checked).length;
+    deleteBtn.disabled = selected === 0;
+    deleteBtn.innerHTML = selected > 0
+        ? '<i class="fas fa-trash me-1"></i>Smazat vybrané (' + selected + ')'
+        : '<i class="fas fa-trash me-1"></i>Smazat vybrané';
+}
+
+function deleteSingleTraining(sessionId) {
+    const checks = getTrainingChecks();
+    checks.forEach((el) => {
+        el.checked = el.value === String(sessionId);
+    });
+    updateBulkDeleteButtonState();
+
+    if (!confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.')) {
+        return;
+    }
+
+    forceSingleDeleteSubmit = true;
+    document.getElementById('bulkDeleteTrainingsForm').submit();
+}
+
+function confirmBulkDeleteTrainings() {
+    if (forceSingleDeleteSubmit) {
+        forceSingleDeleteSubmit = false;
+        return true;
+    }
+    const selected = getTrainingChecks().filter((el) => el.checked).length;
+    if (selected === 0) {
+        alert('Vyberte alespoň jeden trénink.');
+        return false;
+    }
+    return confirm('Opravdu smazat vybrané tréninky (' + selected + '×)? V administraci půjdou obnovit.');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const checks = getTrainingChecks();
+    const toggleAllBtn = document.getElementById('toggleSelectTrainings');
+    const checkAllCurrent = document.getElementById('checkAllCurrent');
+
+    checks.forEach((el) => {
+        el.addEventListener('change', updateBulkDeleteButtonState);
+    });
+
+    if (toggleAllBtn) {
+        toggleAllBtn.addEventListener('click', function () {
+            const hasUnchecked = checks.some((el) => !el.checked);
+            checks.forEach((el) => {
+                el.checked = hasUnchecked;
+            });
+            this.innerHTML = hasUnchecked
+                ? '<i class="fas fa-minus-square me-1"></i>Odebrat výběr'
+                : '<i class="fas fa-check-square me-1"></i>Označit vše';
+            if (checkAllCurrent) {
+                const currentChecks = Array.from(document.querySelectorAll('#currentMonthTrainingsTable .training-bulk-check'));
+                checkAllCurrent.checked = currentChecks.length > 0 && currentChecks.every((cb) => cb.checked);
+            }
+            updateBulkDeleteButtonState();
+        });
+    }
+
+    if (checkAllCurrent) {
+        checkAllCurrent.addEventListener('change', function () {
+            const currentRows = Array.from(document.querySelectorAll('#currentMonthTrainingsTable .training-bulk-check'));
+            currentRows.forEach((cb) => {
+                cb.checked = this.checked;
+            });
+            updateBulkDeleteButtonState();
+        });
+    }
+
+    updateBulkDeleteButtonState();
+});
+</script>
 
 <?php renderFooter(); ?>
