@@ -33,7 +33,7 @@ if (!$stmt->fetch()) {
 
 // Zkontroluj, zda neexistuje nedokončená session pro tohoto sportovce
 $stmt = $pdo->prepare(
-    'SELECT id FROM training_sessions
+    'SELECT id, paired_session_id FROM training_sessions
     WHERE athlete_id = ?
       AND completed_at IS NULL
       AND deleted_by_coach_at IS NULL
@@ -42,7 +42,10 @@ $stmt = $pdo->prepare(
 $stmt->execute([$athleteId]);
 $existing = $stmt->fetch();
 if ($existing) {
-    // Pokračuj v existující session
+    // Pokračuj v existující session (párové nebo individuální)
+    if ($existing['paired_session_id']) {
+        redirect(BASE_URL . '/training_paired_session.php?id=' . $existing['paired_session_id']);
+    }
     redirect(BASE_URL . '/training_session.php?id=' . $existing['id']);
 }
 

@@ -205,6 +205,32 @@ body {
     background: #fff;
 }
 
+/* ================================================================
+   PÁROVÝ TRÉNINK – split view
+   ================================================================ */
+
+.paired-athlete-header {
+    padding: 0.65rem 0.75rem;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 12px;
+    color: #fff;
+}
+
+.paired-athlete-num {
+    font-size: 1.1rem !important;
+}
+
+/* Na mobilní záložkách skrývat neaktivní sloupec (řeší JS) */
+@media (max-width: 767.98px) {
+    #pairedTabs .nav-link {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.7rem;
+    }
+    .paired-athlete-header {
+        border-radius: 10px;
+    }
+}
+
 /* Serie vstupy – výchozí šířka */
 .series-weight { width: 90px; }
 .series-reps   { width: 90px; }

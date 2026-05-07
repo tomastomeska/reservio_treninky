@@ -36,11 +36,18 @@ $athletes = $stmt->fetchAll();
 renderHeader('Dashboard');
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2 class="mb-0"><i class="fas fa-users me-2 text-warning"></i>Moji sportovci</h2>
-    <a href="<?= BASE_URL ?>/athlete_add.php" class="btn btn-warning btn-sm fw-bold">
-        <i class="fas fa-plus me-1"></i>Přidat sportovce
-    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        <?php if (count($athletes) >= 2): ?>
+        <a href="<?= BASE_URL ?>/training_paired_start.php" class="btn btn-outline-warning btn-sm fw-bold">
+            <i class="fas fa-people-group me-1"></i>Párový trénink
+        </a>
+        <?php endif; ?>
+        <a href="<?= BASE_URL ?>/athlete_add.php" class="btn btn-warning btn-sm fw-bold">
+            <i class="fas fa-plus me-1"></i>Přidat sportovce
+        </a>
+    </div>
 </div>
 
 <?php if (empty($athletes)): ?>

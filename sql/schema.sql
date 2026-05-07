@@ -62,18 +62,20 @@ CREATE TABLE IF NOT EXISTS `workout_set_exercises` (
 
 -- Tréninkové session (konkrétní tréninky)
 CREATE TABLE IF NOT EXISTS `training_sessions` (
-    `id`              INT AUTO_INCREMENT PRIMARY KEY,
-    `athlete_id`      INT NOT NULL,
-    `workout_set_id`  INT NOT NULL,
-    `location`        VARCHAR(300),
-    `notes`           TEXT,
-    `training_photo`  VARCHAR(255),
-    `started_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `completed_at`    TIMESTAMP NULL DEFAULT NULL,
+    `id`                  INT AUTO_INCREMENT PRIMARY KEY,
+    `athlete_id`          INT NOT NULL,
+    `workout_set_id`      INT NOT NULL,
+    `location`            VARCHAR(300),
+    `notes`               TEXT,
+    `training_photo`      VARCHAR(255),
+    `started_at`          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `completed_at`        TIMESTAMP NULL DEFAULT NULL,
     `deleted_by_coach_at` DATETIME NULL DEFAULT NULL,
     `deleted_by_coach_id` INT NULL DEFAULT NULL,
-    FOREIGN KEY (`athlete_id`)     REFERENCES `athletes`(`id`)     ON DELETE CASCADE,
-    FOREIGN KEY (`workout_set_id`) REFERENCES `workout_sets`(`id`) ON DELETE RESTRICT
+    `paired_session_id`   INT NULL DEFAULT NULL,
+    FOREIGN KEY (`athlete_id`)        REFERENCES `athletes`(`id`)        ON DELETE CASCADE,
+    FOREIGN KEY (`workout_set_id`)    REFERENCES `workout_sets`(`id`)    ON DELETE RESTRICT,
+    FOREIGN KEY (`paired_session_id`) REFERENCES `paired_sessions`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Snapshot cviků v konkrétní session (historie nezávislá na změnách v sadě)
@@ -111,4 +113,12 @@ CREATE TABLE IF NOT EXISTS `superadmins` (
     `name`       VARCHAR(200),
     `email`      VARCHAR(255),
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Skupiny párových tréninků (2+ sportovci ve stejném čase)
+CREATE TABLE IF NOT EXISTS `paired_sessions` (
+    `id`         INT AUTO_INCREMENT PRIMARY KEY,
+    `coach_id`   INT NOT NULL,
+    `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

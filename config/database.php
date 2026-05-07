@@ -182,4 +182,18 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     if (!$stmtAdminLogin->fetch()) {
         $pdo->exec('ALTER TABLE superadmins ADD COLUMN last_login DATETIME NULL');
     }
+
+    // Párový trénink: tabulka skupin a cizí klíč v training_sessions
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `paired_sessions` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `coach_id`   INT NOT NULL,
+            `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $stmtPaired = $pdo->query("SHOW COLUMNS FROM `training_sessions` LIKE 'paired_session_id'");
+    if (!$stmtPaired->fetch()) {
+        $pdo->exec('ALTER TABLE `training_sessions` ADD COLUMN `paired_session_id` INT NULL DEFAULT NULL');
+    }
 }
