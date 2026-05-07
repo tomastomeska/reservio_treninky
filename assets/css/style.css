@@ -63,6 +63,20 @@ body {
     color: #1a1a1a;
 }
 
+.btn-paired-highlight {
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+    color: #1a1a1a !important;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+.btn-paired-highlight:hover,
+.btn-paired-highlight:focus {
+    background-color: #ffca2c !important;
+    border-color: #ffc720 !important;
+    color: #1a1a1a !important;
+}
+
 .btn-lg {
     padding: 0.65rem 1.5rem;
 }
