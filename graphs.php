@@ -25,7 +25,9 @@ $stmtEx = $pdo->prepare(
      FROM exercises e
      JOIN session_series ss ON ss.exercise_id = e.id
      JOIN training_sessions ts ON ss.session_id = ts.id
-     WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+         WHERE ts.athlete_id = ?
+             AND ts.completed_at IS NOT NULL
+             AND ts.deleted_by_coach_at IS NULL
      ORDER BY e.name'
 );
 $stmtEx->execute([$athleteId]);
@@ -51,7 +53,10 @@ if ($selectedExId) {
          FROM session_series ss
          JOIN training_sessions ts ON ss.session_id = ts.id
          JOIN workout_sets ws ON ts.workout_set_id = ws.id
-         WHERE ts.athlete_id = ? AND ss.exercise_id = ? AND ts.completed_at IS NOT NULL
+                 WHERE ts.athlete_id = ?
+                     AND ss.exercise_id = ?
+                     AND ts.completed_at IS NOT NULL
+                     AND ts.deleted_by_coach_at IS NULL
          GROUP BY ts.id
          ORDER BY ts.completed_at ASC'
     );

@@ -25,7 +25,9 @@ $stmt = $pdo->prepare(
     'SELECT ss.id FROM session_series ss
      JOIN training_sessions ts ON ss.session_id = ts.id
      JOIN athletes a ON ts.athlete_id = a.id
-     WHERE ss.id = ? AND a.coach_id = ? AND ts.completed_at IS NULL'
+    WHERE ss.id = ? AND a.coach_id = ?
+      AND ts.completed_at IS NULL
+      AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$seriesId, $coachId]);
 if (!$stmt->fetch()) {

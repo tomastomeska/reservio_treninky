@@ -14,7 +14,9 @@ $stmt = $pdo->prepare(
      FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
      JOIN workout_sets ws ON ts.workout_set_id = ws.id
-     WHERE ts.id = ? AND a.coach_id = ? AND ts.completed_at IS NOT NULL'
+         WHERE ts.id = ? AND a.coach_id = ?
+             AND ts.completed_at IS NOT NULL
+             AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$sessionId, $coachId]);
 $session = $stmt->fetch();
@@ -24,7 +26,7 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
-$exercises = getWorkoutSetExercises($session['workout_set_id']);
+$exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
 
 $filename = sprintf(
     'trening_%s_%s_%s.csv',

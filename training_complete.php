@@ -41,7 +41,9 @@ if (!empty($_FILES['training_photo']) && ($_FILES['training_photo']['error'] ?? 
 $stmt = $pdo->prepare(
     'SELECT ts.id, ts.athlete_id FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
-     WHERE ts.id = ? AND a.coach_id = ? AND ts.completed_at IS NULL'
+    WHERE ts.id = ? AND a.coach_id = ?
+      AND ts.completed_at IS NULL
+      AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$sessionId, $coachId]);
 $session = $stmt->fetch();

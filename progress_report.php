@@ -48,7 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'email
                 'SELECT ts.*, ws.name AS set_name
                  FROM training_sessions ts
                  JOIN workout_sets ws ON ts.workout_set_id = ws.id
-                 WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+                                 WHERE ts.athlete_id = ?
+                                     AND ts.completed_at IS NOT NULL
+                                     AND ts.deleted_by_coach_at IS NULL
                    AND DATE(ts.completed_at) BETWEEN ? AND ?
                  ORDER BY ts.completed_at ASC'
             );
@@ -57,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'email
 
             $exerciseStats = [];
             foreach ($sessions as $sess) {
-                $exList = getWorkoutSetExercises($sess['workout_set_id']);
+                $exList = getSessionExercises((int)$sess['id'], (int)$sess['workout_set_id']);
                 foreach ($exList as $ex) {
                     $series = getSeriesForExercise($sess['id'], $ex['exercise_id']);
                     if (empty($series)) continue;
@@ -139,7 +141,9 @@ if ($athleteId > 0 && $dateFrom && $dateTo) {
             'SELECT ts.*, ws.name AS set_name
              FROM training_sessions ts
              JOIN workout_sets ws ON ts.workout_set_id = ws.id
-             WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+                         WHERE ts.athlete_id = ?
+                             AND ts.completed_at IS NOT NULL
+                             AND ts.deleted_by_coach_at IS NULL
                AND DATE(ts.completed_at) BETWEEN ? AND ?
              ORDER BY ts.completed_at ASC'
         );
@@ -148,7 +152,7 @@ if ($athleteId > 0 && $dateFrom && $dateTo) {
 
         $exerciseStats = [];
         foreach ($sessions as $sess) {
-            $exList = getWorkoutSetExercises($sess['workout_set_id']);
+            $exList = getSessionExercises((int)$sess['id'], (int)$sess['workout_set_id']);
             foreach ($exList as $ex) {
                 $series = getSeriesForExercise($sess['id'], $ex['exercise_id']);
                 if (empty($series)) continue;

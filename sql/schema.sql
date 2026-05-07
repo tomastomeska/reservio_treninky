@@ -70,8 +70,22 @@ CREATE TABLE IF NOT EXISTS `training_sessions` (
     `training_photo`  VARCHAR(255),
     `started_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `completed_at`    TIMESTAMP NULL DEFAULT NULL,
+    `deleted_by_coach_at` DATETIME NULL DEFAULT NULL,
     FOREIGN KEY (`athlete_id`)     REFERENCES `athletes`(`id`)     ON DELETE CASCADE,
     FOREIGN KEY (`workout_set_id`) REFERENCES `workout_sets`(`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Snapshot cviků v konkrétní session (historie nezávislá na změnách v sadě)
+CREATE TABLE IF NOT EXISTS `training_session_exercises` (
+    `id`             INT AUTO_INCREMENT PRIMARY KEY,
+    `session_id`     INT NOT NULL,
+    `exercise_id`    INT NOT NULL,
+    `exercise_order` INT NOT NULL,
+    `exercise_name`  VARCHAR(200) NOT NULL,
+    UNIQUE KEY `uniq_session_exercise` (`session_id`, `exercise_id`),
+    KEY `idx_session_order` (`session_id`, `exercise_order`),
+    FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Série v tréninku (konkrétní data: váha, opakování, dopomoc)

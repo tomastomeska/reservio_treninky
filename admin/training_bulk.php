@@ -6,6 +6,7 @@ requireAdminLogin();
 
 $pdo    = getDB();
 $errors = [];
+$parsedRows = [];
 
 function parseCsvDate(string $raw): ?string {
     $value = trim($raw);
@@ -303,6 +304,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO training_sessions (athlete_id, workout_set_id, location, notes, started_at, completed_at)
                      VALUES (?, ?, ?, ?, ?, ?)'
                 );
+                $snapshotStmt = $pdo->prepare(
+                    'INSERT INTO training_session_exercises (session_id, exercise_id, exercise_order, exercise_name)
+                     SELECT ?, wse.exercise_id, wse.exercise_order, e.name
+                     FROM workout_set_exercises wse
+                     JOIN exercises e ON e.id = wse.exercise_id
+                     WHERE wse.workout_set_id = ?
+                     ORDER BY wse.exercise_order ASC'
+                );
                 $seriesStmt = $pdo->prepare(
                     'INSERT INTO session_series (session_id, exercise_id, series_order, weight, reps, assistance_reps)
                      VALUES (?, ?, ?, ?, ?, ?)'
@@ -331,6 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $startedAt,
                         ]);
                         $sessionIdsByKey[$sessionKey] = (int)$pdo->lastInsertId();
+                        $snapshotStmt->execute([$sessionIdsByKey[$sessionKey], $r['set_id']]);
                         $createdSessions++;
                     }
 

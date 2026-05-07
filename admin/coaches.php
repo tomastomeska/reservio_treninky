@@ -22,14 +22,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggl
 // Všichni trenéři se statistikami
 $coaches = $pdo->query(
     'SELECT c.*,
-            COUNT(DISTINCT a.id)  AS athlete_count,
-            COUNT(DISTINCT e.id)  AS exercise_count,
-            COUNT(DISTINCT ts.id) AS session_count
-     FROM coaches c
-     LEFT JOIN athletes a ON a.coach_id = c.id
-     LEFT JOIN exercises e ON e.coach_id = c.id
-     LEFT JOIN training_sessions ts ON ts.athlete_id = a.id AND ts.completed_at IS NOT NULL
-     GROUP BY c.id
+                        (SELECT COUNT(*) FROM athletes a WHERE a.coach_id = c.id) AS athlete_count,
+                        (SELECT COUNT(*) FROM exercises e WHERE e.coach_id = c.id) AS exercise_count,
+                        (SELECT COUNT(*)
+                         FROM training_sessions ts
+                         JOIN athletes a2 ON a2.id = ts.athlete_id
+                         WHERE a2.coach_id = c.id
+                             AND ts.completed_at IS NOT NULL
+                             AND ts.deleted_by_coach_at IS NULL) AS session_count,
+                        (SELECT COUNT(*)
+                         FROM training_sessions ts
+                         JOIN athletes a3 ON a3.id = ts.athlete_id
+                         WHERE a3.coach_id = c.id
+                             AND ts.deleted_by_coach_at IS NOT NULL) AS deleted_session_count
+         FROM coaches c
      ORDER BY c.last_login DESC, c.created_at DESC'
 )->fetchAll();
 
@@ -66,6 +72,7 @@ renderAdminHeader('Trenéři');
                         <th class="text-center">Sportovci</th>
                         <th class="text-center">Cviky</th>
                         <th class="text-center">Tréninky</th>
+                        <th class="text-center">Smazané</th>
                         <th class="text-center">Stav</th>
                         <th>Poslední přihlášení</th>
                         <th>Přidán</th>
@@ -93,6 +100,13 @@ renderAdminHeader('Trenéři');
                         </td>
                         <td class="text-center">
                             <span class="badge bg-info text-dark"><?= $c['session_count'] ?></span>
+                        </td>
+                        <td class="text-center">
+                            <a href="<?= BASE_URL ?>/admin/coach_deleted_trainings.php?coach_id=<?= (int)$c['id'] ?>"
+                               class="btn btn-outline-danger btn-sm"
+                               title="Smazané tréninky">
+                                <i class="fas fa-folder-open me-1"></i><?= (int)$c['deleted_session_count'] ?>
+                            </a>
                         </td>
                         <td class="text-center">
                             <?php if ($c['is_active']): ?>

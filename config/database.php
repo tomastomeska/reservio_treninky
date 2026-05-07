@@ -79,6 +79,29 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
     }
 
+    // Soft-delete tréninku trenérem (pro admin obnovu)
+    $stmtTsDeleted = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_at'");
+    if (!$stmtTsDeleted->fetch()) {
+        $pdo->exec('ALTER TABLE training_sessions ADD COLUMN deleted_by_coach_at DATETIME NULL AFTER completed_at');
+    }
+
+    // Snapshot cviků v konkrétní session (historie nezávislá na editaci sady)
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `training_session_exercises` (
+            `id`             INT AUTO_INCREMENT PRIMARY KEY,
+            `session_id`     INT NOT NULL,
+            `exercise_id`    INT NOT NULL,
+            `exercise_order` INT NOT NULL,
+            `exercise_name`  VARCHAR(200) NOT NULL,
+            UNIQUE KEY `uniq_session_exercise` (`session_id`, `exercise_id`),
+            KEY `idx_session_order` (`session_id`, `exercise_order`),
+            CONSTRAINT `fk_tse_session`
+                FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE,
+            CONSTRAINT `fk_tse_exercise`
+                FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
     // Tel. kontakt pro sportovce
     $stmtPhone = $pdo->query("SHOW COLUMNS FROM athletes LIKE 'phone_contact'");
     if (!$stmtPhone->fetch()) {

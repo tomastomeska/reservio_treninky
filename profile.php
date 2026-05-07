@@ -86,7 +86,9 @@ $stmtSessions = $pdo->prepare(
     'SELECT COUNT(*)
      FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
-     WHERE a.coach_id = ? AND ts.completed_at IS NOT NULL'
+    WHERE a.coach_id = ?
+      AND ts.completed_at IS NOT NULL
+      AND ts.deleted_by_coach_at IS NULL'
 );
 $stmtSessions->execute([$coachId]);
 $stats['sessions'] = (int)$stmtSessions->fetchColumn();

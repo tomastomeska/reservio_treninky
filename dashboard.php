@@ -12,13 +12,19 @@ $pdo     = getDB();
 $stmt = $pdo->prepare(
     'SELECT a.*,
             (SELECT COUNT(*) FROM training_sessions ts
-             WHERE ts.athlete_id = a.id AND ts.completed_at IS NOT NULL) AS session_count,
+                         WHERE ts.athlete_id = a.id
+                             AND ts.completed_at IS NOT NULL
+                             AND ts.deleted_by_coach_at IS NULL) AS session_count,
             (SELECT ts2.started_at FROM training_sessions ts2
-             WHERE ts2.athlete_id = a.id AND ts2.completed_at IS NOT NULL
+                         WHERE ts2.athlete_id = a.id
+                             AND ts2.completed_at IS NOT NULL
+                             AND ts2.deleted_by_coach_at IS NULL
              ORDER BY ts2.completed_at DESC LIMIT 1) AS last_session_date,
             (SELECT ws.name FROM training_sessions ts3
              JOIN workout_sets ws ON ts3.workout_set_id = ws.id
-             WHERE ts3.athlete_id = a.id AND ts3.completed_at IS NOT NULL
+                         WHERE ts3.athlete_id = a.id
+                             AND ts3.completed_at IS NOT NULL
+                             AND ts3.deleted_by_coach_at IS NULL
              ORDER BY ts3.completed_at DESC LIMIT 1) AS last_set_name
      FROM athletes a
      WHERE a.coach_id = ?

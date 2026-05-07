@@ -16,7 +16,7 @@ $stmt = $pdo->prepare(
      FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
      JOIN workout_sets ws ON ts.workout_set_id = ws.id
-     WHERE ts.id = ? AND a.coach_id = ?'
+    WHERE ts.id = ? AND a.coach_id = ? AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$sessionId, $coachId]);
 $session = $stmt->fetch();
@@ -31,13 +31,19 @@ if ($session['completed_at']) {
     redirect(BASE_URL . '/training_detail.php?id=' . $sessionId);
 }
 
-// Načtení cviků v sadě
-$exercises = getWorkoutSetExercises($session['workout_set_id']);
+// Načtení cviků v session snapshotu (fallback pro starší data)
+$exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
 
 // Načtení existujících sérií pro každý cvik
 $seriesByExercise = [];
+$lastCompletedByExercise = [];
 foreach ($exercises as $ex) {
     $seriesByExercise[$ex['exercise_id']] = getSeriesForExercise($sessionId, $ex['exercise_id']);
+    $lastCompletedByExercise[$ex['exercise_id']] = getLastCompletedSeriesForExercise(
+        (int)$session['athlete_id'],
+        (int)$ex['exercise_id'],
+        $sessionId
+    );
 }
 
 renderHeader('Aktivní trénink');
@@ -72,6 +78,13 @@ renderHeader('Aktivní trénink');
     <div class="card-header d-flex align-items-center bg-dark text-white">
         <span class="badge bg-warning text-dark me-2 fs-5"><?= $ex['exercise_order'] ?></span>
         <span class="fw-bold fs-5"><?= h($ex['exercise_name']) ?></span>
+        <?php $lastCompleted = $lastCompletedByExercise[$ex['exercise_id']] ?? null; ?>
+        <?php if ($lastCompleted): ?>
+        <span class="ms-3 small text-warning-emphasis">
+            Posledně: <?= formatDate($lastCompleted['session']['completed_at']) ?>
+            (<?= h($lastCompleted['session']['set_name']) ?>)
+        </span>
+        <?php endif; ?>
         <span class="ms-auto badge bg-secondary" id="series-count-<?= $ex['exercise_id'] ?>">
             <?= count($series) ?> séri<?= count($series) === 1 ? 'e' : 'í' ?>
         </span>
@@ -115,6 +128,20 @@ renderHeader('Aktivní trénink');
         </div>
 
         <div class="p-3 border-top bg-light">
+            <?php if ($lastCompleted): ?>
+            <div class="mb-2 small text-muted">
+                <?php foreach ($lastCompleted['series'] as $prev): ?>
+                <span class="badge text-bg-light border me-1">
+                    #<?= (int)$prev['series_order'] ?>:
+                    <?= number_format((float)$prev['weight'], 1, ',', '') ?> kg,
+                    <?= (int)$prev['reps'] ?> opak.
+                    <?php if ((int)$prev['assistance_reps'] > 0): ?>
+                    , dop. <?= (int)$prev['assistance_reps'] ?>
+                    <?php endif; ?>
+                </span>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
             <!-- Formulář pro přidání série (inline) -->
             <div class="add-series-row" id="add-series-form-<?= $ex['exercise_id'] ?>">
                 <div>

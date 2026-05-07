@@ -34,7 +34,9 @@ if (!$stmt->fetch()) {
 // Zkontroluj, zda neexistuje nedokončená session pro tohoto sportovce
 $stmt = $pdo->prepare(
     'SELECT id FROM training_sessions
-     WHERE athlete_id = ? AND completed_at IS NULL
+    WHERE athlete_id = ?
+      AND completed_at IS NULL
+      AND deleted_by_coach_at IS NULL
      LIMIT 1'
 );
 $stmt->execute([$athleteId]);
@@ -50,5 +52,16 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$athleteId, $workoutSetId]);
 $sessionId = (int)$pdo->lastInsertId();
+
+// Ulož snapshot cviků v době startu tréninku.
+$snapshotStmt = $pdo->prepare(
+    'INSERT INTO training_session_exercises (session_id, exercise_id, exercise_order, exercise_name)
+     SELECT ?, wse.exercise_id, wse.exercise_order, e.name
+     FROM workout_set_exercises wse
+     JOIN exercises e ON e.id = wse.exercise_id
+     WHERE wse.workout_set_id = ?
+     ORDER BY wse.exercise_order ASC'
+);
+$snapshotStmt->execute([$sessionId, $workoutSetId]);
 
 redirect(BASE_URL . '/training_session.php?id=' . $sessionId);

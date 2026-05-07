@@ -50,6 +50,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $sessionId = (int)$pdo->lastInsertId();
 
+        $snapshotStmt = $pdo->prepare(
+            'INSERT INTO training_session_exercises (session_id, exercise_id, exercise_order, exercise_name)
+             SELECT ?, wse.exercise_id, wse.exercise_order, e.name
+             FROM workout_set_exercises wse
+             JOIN exercises e ON e.id = wse.exercise_id
+             WHERE wse.workout_set_id = ?
+             ORDER BY wse.exercise_order ASC'
+        );
+        $snapshotStmt->execute([$sessionId, $workoutSetId]);
+
         // Vložíme série
         $exerciseIds = $_POST['exercise_id'] ?? [];
         $insSerie    = $pdo->prepare(

@@ -26,7 +26,7 @@ $stmt = $pdo->prepare(
             (SELECT COUNT(*) FROM session_series ss WHERE ss.session_id = ts.id) AS total_series
      FROM training_sessions ts
      JOIN workout_sets ws ON ts.workout_set_id = ws.id
-     WHERE ts.athlete_id = ?
+    WHERE ts.athlete_id = ? AND ts.deleted_by_coach_at IS NULL
      ORDER BY ts.started_at DESC'
 );
 $stmt->execute([$athleteId]);
@@ -36,6 +36,18 @@ $sessions = $stmt->fetchAll();
 $lastSession = null;
 foreach ($sessions as $s) {
     if ($s['completed_at']) { $lastSession = $s; break; }
+}
+
+$currentMonthKey = date('Y-m');
+$currentMonthSessions = [];
+$olderSessionsByMonth = [];
+foreach ($sessions as $s) {
+    $monthKey = date('Y-m', strtotime($s['started_at']));
+    if ($monthKey === $currentMonthKey) {
+        $currentMonthSessions[] = $s;
+    } else {
+        $olderSessionsByMonth[$monthKey][] = $s;
+    }
 }
 
 // Sady dostupné pro trénink (pro dropdown "Spustit trénink")
@@ -194,6 +206,9 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
             <i class="fas fa-inbox fa-2x mb-2"></i><br>Zatím žádné tréninky.
         </div>
         <?php else: ?>
+        <div class="p-3 border-bottom bg-light">
+            <strong>Aktuální měsíc (<?= date('m/Y') ?>)</strong>
+        </div>
         <div class="table-responsive">
             <table class="table table-hover mb-0 align-middle table-sessions">
                 <thead class="table-light">
@@ -208,7 +223,12 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($sessions as $s): ?>
+                    <?php if (empty($currentMonthSessions)): ?>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">V aktuálním měsíci zatím nejsou žádné tréninky.</td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php foreach ($currentMonthSessions as $s): ?>
                     <tr>
                         <td>
                             <strong><?= formatDate($s['started_at']) ?></strong>
@@ -248,12 +268,107 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                                 <i class="fas fa-eye me-1"></i>Detail
                             </a>
                             <?php endif; ?>
+                            <form method="post" action="<?= BASE_URL ?>/training_delete.php" class="d-inline"
+                                  onsubmit="return confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.');">
+                                <?= csrfField() ?>
+                                <input type="hidden" name="session_id" value="<?= (int)$s['id'] ?>">
+                                <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . $athleteId) ?>">
+                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Smazat trénink">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
+
+        <?php if (!empty($olderSessionsByMonth)): ?>
+        <div class="accordion" id="olderMonthsAccordion">
+            <?php $monthIdx = 0; ?>
+            <?php foreach ($olderSessionsByMonth as $monthKey => $monthSessions): ?>
+            <?php
+            $monthIdx++;
+            $accId = 'month-' . $monthIdx;
+            $monthLabel = date('m/Y', strtotime($monthSessions[0]['started_at']));
+            ?>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading-<?= $accId ?>">
+                    <button class="accordion-button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#collapse-<?= $accId ?>"
+                            aria-expanded="false" aria-controls="collapse-<?= $accId ?>">
+                        <?= h($monthLabel) ?>
+                        <span class="badge bg-secondary ms-2"><?= count($monthSessions) ?></span>
+                    </button>
+                </h2>
+                <div id="collapse-<?= $accId ?>" class="accordion-collapse collapse"
+                     aria-labelledby="heading-<?= $accId ?>" data-bs-parent="#olderMonthsAccordion">
+                    <div class="accordion-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 align-middle table-sessions">
+                                <tbody>
+                                    <?php foreach ($monthSessions as $s): ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?= formatDate($s['started_at']) ?></strong>
+                                            <br><small class="text-muted"><?= date('H:i', strtotime($s['started_at'])) ?></small>
+                                        </td>
+                                        <td><span class="badge bg-secondary fs-6"><?= h($s['set_name']) ?></span></td>
+                                        <td class="text-muted"><?= $s['location'] ? h($s['location']) : '–' ?></td>
+                                        <td class="text-center"><?= $s['total_series'] ?></td>
+                                        <td>
+                                            <?php if ($s['completed_at']): ?>
+                                            <span class="badge bg-success">Dokončeno</span>
+                                            <?php else: ?>
+                                            <span class="badge bg-warning text-dark">Probíhá</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-center">
+                                            <?php if (!empty($s['training_photo'])): ?>
+                                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>#training-photo"
+                                               title="Zobrazit fotografii">
+                                                <img src="<?= h(photoUrl($s['training_photo'], 'trainings')) ?>"
+                                                     alt="foto"
+                                                     style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #ffc107">
+                                            </a>
+                                            <?php else: ?>
+                                            <span class="text-muted">–</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-end">
+                                            <?php if (!$s['completed_at']): ?>
+                                            <a href="<?= BASE_URL ?>/training_session.php?id=<?= $s['id'] ?>"
+                                               class="btn btn-warning btn-sm">
+                                                <i class="fas fa-play me-1"></i>Pokračovat
+                                            </a>
+                                            <?php else: ?>
+                                            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $s['id'] ?>"
+                                               class="btn btn-outline-dark btn-sm">
+                                                <i class="fas fa-eye me-1"></i>Detail
+                                            </a>
+                                            <?php endif; ?>
+                                            <form method="post" action="<?= BASE_URL ?>/training_delete.php" class="d-inline"
+                                                  onsubmit="return confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.');">
+                                                <?= csrfField() ?>
+                                                <input type="hidden" name="session_id" value="<?= (int)$s['id'] ?>">
+                                                <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . $athleteId) ?>">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Smazat trénink">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>

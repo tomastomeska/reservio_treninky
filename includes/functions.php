@@ -69,7 +69,9 @@ function getLastSession(int $athleteId): ?array {
         'SELECT ts.*, ws.name AS set_name
          FROM training_sessions ts
          JOIN workout_sets ws ON ts.workout_set_id = ws.id
-         WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+                 WHERE ts.athlete_id = ?
+                     AND ts.completed_at IS NOT NULL
+                     AND ts.deleted_by_coach_at IS NULL
          ORDER BY ts.completed_at DESC
          LIMIT 1'
     );
@@ -82,7 +84,9 @@ function getSessionCount(int $athleteId): int {
     $pdo  = getDB();
     $stmt = $pdo->prepare(
         'SELECT COUNT(*) FROM training_sessions
-         WHERE athlete_id = ? AND completed_at IS NOT NULL'
+                 WHERE athlete_id = ?
+                     AND completed_at IS NOT NULL
+                     AND deleted_by_coach_at IS NULL'
     );
     $stmt->execute([$athleteId]);
     return (int)$stmt->fetchColumn();
@@ -112,6 +116,97 @@ function getWorkoutSetExercises(int $setId): array {
     );
     $stmt->execute([$setId]);
     return $stmt->fetchAll();
+}
+
+// Vrátí cviky konkrétní session ze snapshotu; fallback pro starší data.
+function getSessionExercises(int $sessionId, int $setId): array {
+    $pdo = getDB();
+
+    $snapshot = $pdo->prepare(
+        'SELECT tse.exercise_id, tse.exercise_order, tse.exercise_name
+         FROM training_session_exercises tse
+         WHERE tse.session_id = ?
+         ORDER BY tse.exercise_order ASC'
+    );
+    $snapshot->execute([$sessionId]);
+    $snapshotRows = $snapshot->fetchAll();
+    if (!empty($snapshotRows)) {
+        return $snapshotRows;
+    }
+
+    $setExercises = getWorkoutSetExercises($setId);
+    $result = [];
+    $maxOrder = 0;
+    foreach ($setExercises as $row) {
+        $eid = (int)$row['exercise_id'];
+        $ord = (int)$row['exercise_order'];
+        $result[$eid] = [
+            'exercise_id'    => $eid,
+            'exercise_order' => $ord,
+            'exercise_name'  => $row['exercise_name'],
+        ];
+        if ($ord > $maxOrder) {
+            $maxOrder = $ord;
+        }
+    }
+
+    // Starší data bez snapshotu: doplň cviky, které už nejsou v sadě, ale mají série.
+    $fromSeries = $pdo->prepare(
+        'SELECT DISTINCT ss.exercise_id, e.name AS exercise_name
+         FROM session_series ss
+         JOIN exercises e ON e.id = ss.exercise_id
+         WHERE ss.session_id = ?
+         ORDER BY ss.exercise_id ASC'
+    );
+    $fromSeries->execute([$sessionId]);
+    foreach ($fromSeries->fetchAll() as $row) {
+        $eid = (int)$row['exercise_id'];
+        if (!isset($result[$eid])) {
+            $maxOrder++;
+            $result[$eid] = [
+                'exercise_id'    => $eid,
+                'exercise_order' => $maxOrder,
+                'exercise_name'  => $row['exercise_name'],
+            ];
+        }
+    }
+
+    usort($result, fn($a, $b) => ((int)$a['exercise_order']) <=> ((int)$b['exercise_order']));
+    return array_values($result);
+}
+
+// Vrátí poslední dokončené série daného cviku u sportovce (pro porovnání během tréninku).
+function getLastCompletedSeriesForExercise(int $athleteId, int $exerciseId, int $excludeSessionId = 0): ?array {
+    $pdo = getDB();
+
+    $lastSessionStmt = $pdo->prepare(
+        'SELECT ts.id, ts.completed_at, ws.name AS set_name
+         FROM training_sessions ts
+         JOIN workout_sets ws ON ws.id = ts.workout_set_id
+         JOIN session_series ss ON ss.session_id = ts.id
+         WHERE ts.athlete_id = ?
+           AND ss.exercise_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.deleted_by_coach_at IS NULL
+           AND ts.id <> ?
+         ORDER BY ts.completed_at DESC
+         LIMIT 1'
+    );
+    $lastSessionStmt->execute([$athleteId, $exerciseId, $excludeSessionId]);
+    $session = $lastSessionStmt->fetch();
+    if (!$session) {
+        return null;
+    }
+
+    $series = getSeriesForExercise((int)$session['id'], $exerciseId);
+    if (empty($series)) {
+        return null;
+    }
+
+    return [
+        'session' => $session,
+        'series'  => $series,
+    ];
 }
 
 // Bezpečný int z $_GET / $_POST

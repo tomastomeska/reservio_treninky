@@ -16,7 +16,7 @@ $stmt = $pdo->prepare(
      FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
      JOIN workout_sets ws ON ts.workout_set_id = ws.id
-     WHERE ts.id = ? AND a.coach_id = ?'
+    WHERE ts.id = ? AND a.coach_id = ? AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$sessionId, $coachId]);
 $session = $stmt->fetch();
@@ -26,8 +26,8 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
-// Načtení cviků v sadě
-$exercises = getWorkoutSetExercises($session['workout_set_id']);
+// Načtení cviků v session snapshotu (fallback pro starší data)
+$exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
 
 // Načtení sérií
 $seriesByExercise = [];
@@ -80,6 +80,15 @@ renderHeader('Detail tréninku');
             <i class="fas fa-play me-1"></i>Pokračovat
         </a>
         <?php endif; ?>
+        <form method="post" action="<?= BASE_URL ?>/training_delete.php" class="d-inline"
+              onsubmit="return confirm('Opravdu smazat tento trénink? V administraci půjde obnovit.');">
+            <?= csrfField() ?>
+            <input type="hidden" name="session_id" value="<?= (int)$sessionId ?>">
+            <input type="hidden" name="redirect_to" value="<?= h(BASE_URL . '/athlete_detail.php?id=' . (int)$session['athlete_id']) ?>">
+            <button type="submit" class="btn btn-outline-danger btn-sm" title="Smazat trénink">
+                <i class="fas fa-trash me-1"></i>Smazat
+            </button>
+        </form>
     </div>
 </div>
 
