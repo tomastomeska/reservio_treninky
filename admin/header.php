@@ -65,6 +65,14 @@ function renderAdminHeader(string $title = ''): void {
 				   class="nav-link <?= in_array(basename($_SERVER['PHP_SELF']), ['exercises.php','exercise_export.php','exercise_import.php']) ? 'active' : '' ?>">
 					<i class="fas fa-globe me-2"></i>Globální cviky
 				</a>
+				<a href="<?= BASE_URL ?>/admin/training_add.php"
+				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'training_add.php' ? 'active' : '' ?>">
+					<i class="fas fa-calendar-plus me-2"></i>Přidat trénink
+				</a>
+				<a href="<?= BASE_URL ?>/admin/training_bulk.php"
+				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'training_bulk.php' ? 'active' : '' ?>">
+					<i class="fas fa-file-csv me-2"></i>Import tréninků CSV
+				</a>
 				<a href="<?= BASE_URL ?>/admin/login_message.php"
 				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'login_message.php' ? 'active' : '' ?>">
 					<i class="fas fa-bell me-2"></i>Hláška po přihlášení
