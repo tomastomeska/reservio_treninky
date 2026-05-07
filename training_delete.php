@@ -31,8 +31,8 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
-$pdo->prepare('UPDATE training_sessions SET deleted_by_coach_at = NOW() WHERE id = ?')
-    ->execute([$sessionId]);
+$pdo->prepare('UPDATE training_sessions SET deleted_by_coach_at = NOW(), deleted_by_coach_id = ? WHERE id = ?')
+    ->execute([$coachId, $sessionId]);
 
 flash('success', 'Trénink byl přesunut do smazaných.');
 

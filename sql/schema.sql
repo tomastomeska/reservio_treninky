@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS `training_sessions` (
     `started_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `completed_at`    TIMESTAMP NULL DEFAULT NULL,
     `deleted_by_coach_at` DATETIME NULL DEFAULT NULL,
+    `deleted_by_coach_id` INT NULL DEFAULT NULL,
     FOREIGN KEY (`athlete_id`)     REFERENCES `athletes`(`id`)     ON DELETE CASCADE,
     FOREIGN KEY (`workout_set_id`) REFERENCES `workout_sets`(`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
     );
     $check->execute([$sessionId, $coachId]);
     if ($check->fetch()) {
-        $pdo->prepare('UPDATE training_sessions SET deleted_by_coach_at = NULL WHERE id = ?')
+        $pdo->prepare('UPDATE training_sessions SET deleted_by_coach_at = NULL, deleted_by_coach_id = NULL WHERE id = ?')
             ->execute([$sessionId]);
         flash('success', 'Trenink byl obnoven.');
     } else {
@@ -45,13 +45,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
 }
 
 $stmt = $pdo->prepare(
-    'SELECT ts.id, ts.started_at, ts.completed_at, ts.location, ts.deleted_by_coach_at,
+        'SELECT ts.id, ts.started_at, ts.completed_at, ts.location, ts.deleted_by_coach_at,
+                        ts.deleted_by_coach_id,
             ws.name AS set_name,
+                        c.name AS coach_name,
+                        c.username AS coach_username,
+                        dc.name AS deleted_by_name,
+                        dc.username AS deleted_by_username,
             a.first_name, a.last_name,
             (SELECT COUNT(*) FROM session_series ss WHERE ss.session_id = ts.id) AS total_series
      FROM training_sessions ts
      JOIN athletes a ON a.id = ts.athlete_id
      JOIN workout_sets ws ON ws.id = ts.workout_set_id
+         JOIN coaches c ON c.id = a.coach_id
+         LEFT JOIN coaches dc ON dc.id = ts.deleted_by_coach_id
      WHERE a.coach_id = ?
        AND ts.deleted_by_coach_at IS NOT NULL
      ORDER BY ts.deleted_by_coach_at DESC, ts.started_at DESC'
@@ -86,9 +93,11 @@ renderAdminHeader('Smazane treninky');
                     <tr>
                         <th>#</th>
                         <th>Sportovec</th>
+                        <th>Trenér</th>
                         <th>Sada</th>
                         <th>Datum</th>
                         <th class="text-center">Serii</th>
+                        <th>Smazal</th>
                         <th>Smazano</th>
                         <th class="text-end">Akce</th>
                     </tr>
@@ -98,9 +107,13 @@ renderAdminHeader('Smazane treninky');
                     <tr>
                         <td class="text-muted small"><?= $i + 1 ?></td>
                         <td class="fw-semibold"><?= h($s['first_name'] . ' ' . $s['last_name']) ?></td>
+                        <td><?= h(($s['coach_name'] ?: $s['coach_username'])) ?></td>
                         <td><span class="badge bg-secondary"><?= h($s['set_name']) ?></span></td>
                         <td><?= formatDateTime($s['completed_at'] ?: $s['started_at']) ?></td>
                         <td class="text-center"><span class="badge bg-dark"><?= (int)$s['total_series'] ?></span></td>
+                        <td class="text-muted small">
+                            <?= h(($s['deleted_by_name'] ?: $s['deleted_by_username'] ?: ($s['coach_name'] ?: $s['coach_username']))) ?>
+                        </td>
                         <td class="text-muted small"><?= formatDateTime($s['deleted_by_coach_at']) ?></td>
                         <td class="text-end">
                             <form method="post" class="d-inline" onsubmit="return confirm('Obnovit tento trenink?');">

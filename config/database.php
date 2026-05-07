@@ -85,6 +85,12 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN deleted_by_coach_at DATETIME NULL AFTER completed_at');
     }
 
+    // ID trenéra, který trénink smazal (audit)
+    $stmtTsDeletedBy = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_id'");
+    if (!$stmtTsDeletedBy->fetch()) {
+        $pdo->exec('ALTER TABLE training_sessions ADD COLUMN deleted_by_coach_id INT NULL AFTER deleted_by_coach_at');
+    }
+
     // Snapshot cviků v konkrétní session (historie nezávislá na editaci sady)
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `training_session_exercises` (

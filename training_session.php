@@ -81,8 +81,7 @@ renderHeader('Aktivní trénink');
         <?php $lastCompleted = $lastCompletedByExercise[$ex['exercise_id']] ?? null; ?>
         <?php if ($lastCompleted): ?>
         <span class="ms-3 small text-warning-emphasis">
-            Posledně: <?= formatDate($lastCompleted['session']['completed_at']) ?>
-            (<?= h($lastCompleted['session']['set_name']) ?>)
+            Poslední trénink tohoto cviku: <?= formatDate($lastCompleted['session']['completed_at']) ?>
         </span>
         <?php endif; ?>
         <span class="ms-auto badge bg-secondary" id="series-count-<?= $ex['exercise_id'] ?>">
@@ -129,17 +128,33 @@ renderHeader('Aktivní trénink');
 
         <div class="p-3 border-top bg-light">
             <?php if ($lastCompleted): ?>
-            <div class="mb-2 small text-muted">
-                <?php foreach ($lastCompleted['series'] as $prev): ?>
-                <span class="badge text-bg-light border me-1">
-                    #<?= (int)$prev['series_order'] ?>:
-                    <?= number_format((float)$prev['weight'], 1, ',', '') ?> kg,
-                    <?= (int)$prev['reps'] ?> opak.
-                    <?php if ((int)$prev['assistance_reps'] > 0): ?>
-                    , dop. <?= (int)$prev['assistance_reps'] ?>
-                    <?php endif; ?>
-                </span>
-                <?php endforeach; ?>
+            <div class="mb-3 p-2 border rounded bg-white">
+                <div class="small fw-semibold text-dark mb-2">
+                    Poslední trénink tohoto cviku byl: <?= formatDateTime($lastCompleted['session']['completed_at']) ?>
+                    (<?= h($lastCompleted['session']['set_name']) ?>)
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Váha (kg)</th>
+                                <th>Opakování</th>
+                                <th>Dopomoc</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($lastCompleted['series'] as $prev): ?>
+                            <tr>
+                                <td class="fw-bold text-muted"><?= (int)$prev['series_order'] ?></td>
+                                <td><?= number_format((float)$prev['weight'], 1, ',', '') ?></td>
+                                <td><?= (int)$prev['reps'] ?></td>
+                                <td><?= (int)$prev['assistance_reps'] > 0 ? (int)$prev['assistance_reps'] : '–' ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <?php endif; ?>
             <!-- Formulář pro přidání série (inline) -->
