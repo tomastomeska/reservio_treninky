@@ -704,6 +704,7 @@ HTML;
                 'verify_peer'       => false,
                 'verify_peer_name'  => false,
                 'allow_self_signed' => true,
+                'ciphers'           => 'DEFAULT:@SECLEVEL=0',
             ],
         ];
 
@@ -872,6 +873,7 @@ HTML;
                 'verify_peer'       => false,
                 'verify_peer_name'  => false,
                 'allow_self_signed' => true,
+                'ciphers'           => 'DEFAULT:@SECLEVEL=0',
             ],
         ];
 
@@ -981,7 +983,7 @@ HTML;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
         $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
@@ -1085,7 +1087,7 @@ HTML;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
         $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
@@ -1122,7 +1124,7 @@ function sendTestEmail(string $toEmail): string {
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
         $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         $mail->addAddress($toEmail);
         $mail->isHTML(false);
