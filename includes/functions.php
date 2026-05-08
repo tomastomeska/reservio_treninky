@@ -1080,6 +1080,54 @@ function _configureMail(object $mail): void {
 }
 
 /**
+ * Odešle trenérovi email s informací o nové zprávě v aplikaci.
+ * @param string $toEmail   Email trenéra
+ * @param string $coachName Jméno trenéra
+ * @param string $subject   Předmět zprávy
+ * @param int    $messageId ID zprávy (pro odkaz)
+ * @return bool
+ */
+function sendMessageNotificationEmail(string $toEmail, string $coachName, string $subject, int $messageId): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        return false;
+    }
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $link = (defined('BASE_URL') ? BASE_URL : '') . '/zprava_detail.php?id=' . $messageId;
+
+    $htmlBody = "<p>Dobrý den, <strong>" . htmlspecialchars($coachName, ENT_QUOTES) . "</strong>,</p>"
+        . "<p>obdrželi jste novou zprávu v aplikaci <strong>TrainerApp</strong>.</p>"
+        . "<p><strong>Předmět:</strong> " . htmlspecialchars($subject, ENT_QUOTES) . "</p>"
+        . "<p><a href=\"{$link}\" style=\"background:#0d6efd;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none\">Zobrazit zprávu</a></p>"
+        . "<p style=\"color:#888;font-size:.9em\">Nebo zkopírujte odkaz: {$link}</p>"
+        . "<hr><p style=\"color:#888;font-size:.85em\">TrainerApp – automatické notifikace</p>";
+
+    $altBody = "Dobrý den, {$coachName},\n\n"
+        . "obdrželi jste novou zprávu v aplikaci TrainerApp.\n"
+        . "Předmět: {$subject}\n\n"
+        . "Zobrazit zprávu: {$link}\n\n"
+        . "TrainerApp – automatické notifikace";
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        _configureMail($mail);
+        $mail->addAddress($toEmail);
+        $mail->isHTML(true);
+        $mail->Subject = 'Nová zpráva v TrainerApp: ' . $subject;
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $altBody;
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendMessageNotificationEmail error: ' . $mail->ErrorInfo . ' | ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
  * Odešle testovací email. Vrátí 'ok' nebo chybovou zprávu.
  */
 function sendTestEmail(string $toEmail): string {

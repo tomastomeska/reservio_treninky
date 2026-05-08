@@ -2,6 +2,7 @@
 // admin/zprava_nova.php – odeslat novou zprávu trenérům
 require_once __DIR__ . '/../includes/admin_auth.php';
 require_once __DIR__ . '/header.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 requireAdminLogin();
 $pdo = getDB();
@@ -81,7 +82,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 				$stmtRec->execute([$messageId, $cid]);
 			}
 			$pdo->commit();
-			flash('success', 'Zpráva byla odeslána ' . count($coachIds) . ' trenérům.');
+
+			// Emailové notifikace příjemcům (kteří mají email)
+			$coachMap = array_column($coaches, null, 'id');
+			$emailSent = 0;
+			foreach ($coachIds as $cid) {
+				$c = $coachMap[$cid] ?? null;
+				if ($c && !empty($c['email'])) {
+					if (sendMessageNotificationEmail($c['email'], $c['name'] ?: $c['username'], $subject, $messageId)) {
+						$emailSent++;
+					}
+				}
+			}
+
+			$emailNote = $emailSent > 0 ? " (email odesláno: {$emailSent})" : '';
+			flash('success', 'Zpráva byla odeslána ' . count($coachIds) . ' trenérům.' . $emailNote);
 			redirect(BASE_URL . '/admin/zprava_detail.php?id=' . $messageId);
 		} catch (Throwable $e) {
 			$pdo->rollBack();
