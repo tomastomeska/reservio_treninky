@@ -1096,19 +1096,18 @@ function sendMessageNotificationEmail(string $toEmail, string $coachName, string
     require_once $phpmailerSrc . '/PHPMailer.php';
     require_once $phpmailerSrc . '/SMTP.php';
 
-    $link = (defined('BASE_URL') ? BASE_URL : '') . '/zprava_detail.php?id=' . $messageId;
+    $link = 'https://reservio.online/zpravy.php';
 
     $htmlBody = "<p>Dobrý den, <strong>" . htmlspecialchars($coachName, ENT_QUOTES) . "</strong>,</p>"
         . "<p>obdrželi jste novou zprávu v aplikaci <strong>TrainerApp</strong>.</p>"
         . "<p><strong>Předmět:</strong> " . htmlspecialchars($subject, ENT_QUOTES) . "</p>"
-        . "<p><a href=\"{$link}\" style=\"background:#0d6efd;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none\">Zobrazit zprávu</a></p>"
-        . "<p style=\"color:#888;font-size:.9em\">Nebo zkopírujte odkaz: {$link}</p>"
+        . "<p><a href=\"{$link}\" style=\"background:#0d6efd;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none\">Přejít do aplikace TrainerApp</a></p>"
         . "<hr><p style=\"color:#888;font-size:.85em\">TrainerApp – automatické notifikace</p>";
 
     $altBody = "Dobrý den, {$coachName},\n\n"
         . "obdrželi jste novou zprávu v aplikaci TrainerApp.\n"
         . "Předmět: {$subject}\n\n"
-        . "Zobrazit zprávu: {$link}\n\n"
+        . "Přejít do aplikace: https://reservio.online/zpravy.php\n\n"
         . "TrainerApp – automatické notifikace";
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);

@@ -81,6 +81,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			foreach ($coachIds as $cid) {
 				$stmtRec->execute([$messageId, $cid]);
 			}
+
+			// Akční tlačítka
+			$actionLabels = $_POST['action_labels'] ?? [];
+			$actionTypes  = $_POST['action_types']  ?? [];
+			$stmtAct = $pdo->prepare("
+				INSERT INTO message_actions (message_id, label, action_type, sort_order) VALUES (?,?,?,?)
+			");
+			foreach ($actionLabels as $i => $lbl) {
+				$lbl = trim($lbl);
+				if ($lbl === '') continue;
+				$type = in_array($actionTypes[$i] ?? '', ['button','signature']) ? $actionTypes[$i] : 'button';
+				$stmtAct->execute([$messageId, $lbl, $type, $i]);
+			}
+
 			$pdo->commit();
 
 			// Emailové notifikace příjemcům (kteří mají email)
@@ -144,6 +158,33 @@ renderAdminHeader('Nová zpráva');
 					<input type="file" name="attachment" class="form-control"
 					       accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.gif,.webp,.zip,.rar,.7z,.mp4,.mov,.avi,.mkv,.txt,.ppt,.pptx">
 				</div>
+
+				<!-- Akční tlačítka -->
+				<hr>
+				<div class="mb-2">
+					<label class="form-label fw-semibold">
+						<i class="fas fa-hand-pointer me-1 text-primary"></i>Akční tlačítka
+						<small class="text-muted fw-normal">(volitelné – trenér je uvidí ve zprávě)</small>
+					</label>
+					<div id="actionsContainer">
+					<?php foreach (($_POST['action_labels'] ?? []) as $i => $lbl): ?>
+					<div class="action-row d-flex gap-2 mb-2">
+						<input type="text" name="action_labels[]" class="form-control"
+						       placeholder="Text tlačítka (např. Souhlasím)" value="<?= h($lbl) ?>">
+						<select name="action_types[]" class="form-select" style="width:150px;flex-shrink:0">
+							<option value="button" <?= (($_POST['action_types'][$i] ?? '') === 'button') ? 'selected' : '' ?>>Tlačítko</option>
+							<option value="signature" <?= (($_POST['action_types'][$i] ?? '') === 'signature') ? 'selected' : '' ?>>Podpis</option>
+						</select>
+						<button type="button" class="btn btn-outline-danger" onclick="this.closest('.action-row').remove()">
+							<i class="fas fa-trash"></i>
+						</button>
+					</div>
+					<?php endforeach; ?>
+					</div>
+					<button type="button" class="btn btn-sm btn-outline-primary mt-1" id="btnAddAction">
+						<i class="fas fa-plus me-1"></i>Přidat akci
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -198,13 +239,29 @@ document.getElementById('chk_all').addEventListener('change', function() {
 		cb.disabled = this.checked;
 	});
 });
-// Pokud je všichni zaškrtnut při načtení, odblokuj ostatní
 (function() {
 	const all = document.getElementById('chk_all');
 	if (all.checked) {
 		document.querySelectorAll('.coach-chk').forEach(cb => cb.disabled = true);
 	}
 })();
+
+// Dynamické přidávání akčních tlačítek
+document.getElementById('btnAddAction').addEventListener('click', function() {
+	const row = document.createElement('div');
+	row.className = 'action-row d-flex gap-2 mb-2';
+	row.innerHTML = `
+		<input type="text" name="action_labels[]" class="form-control" placeholder="Text tlačítka (např. Souhlasím)">
+		<select name="action_types[]" class="form-select" style="width:150px;flex-shrink:0">
+			<option value="button">Tlačítko</option>
+			<option value="signature">Podpis</option>
+		</select>
+		<button type="button" class="btn btn-outline-danger" onclick="this.closest('.action-row').remove()">
+			<i class="fas fa-trash"></i>
+		</button>`;
+	document.getElementById('actionsContainer').appendChild(row);
+	row.querySelector('input').focus();
+});
 </script>
 
 <?php renderAdminFooter(); ?>

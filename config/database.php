@@ -228,16 +228,51 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    // Příjemci zpráv (trenéři) + stav přečtení
+    // Příjemci zpráv (trenéři) + stav přečtení + složka
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `admin_message_recipients` (
             `id`         INT AUTO_INCREMENT PRIMARY KEY,
             `message_id` INT NOT NULL,
             `coach_id`   INT NOT NULL,
             `read_at`    DATETIME NULL,
+            `status`     ENUM('inbox','archived','deleted') NOT NULL DEFAULT 'inbox',
             UNIQUE KEY `uq_msg_coach` (`message_id`, `coach_id`),
             FOREIGN KEY (`message_id`) REFERENCES `admin_messages`(`id`) ON DELETE CASCADE,
             FOREIGN KEY (`coach_id`)   REFERENCES `coaches`(`id`)        ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Přidat status sloupec pokud tabulka existuje bez něj (starší instalace)
+    $stmtMsgStatus = $pdo->query("SHOW COLUMNS FROM admin_message_recipients LIKE 'status'");
+    if (!$stmtMsgStatus->fetch()) {
+        $pdo->exec("ALTER TABLE admin_message_recipients ADD COLUMN `status` ENUM('inbox','archived','deleted') NOT NULL DEFAULT 'inbox'");
+    }
+
+    // Akční tlačítka zpráv (volitelná tlačítka/podpisy přidaná adminem do zprávy)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `message_actions` (
+            `id`          INT AUTO_INCREMENT PRIMARY KEY,
+            `message_id`  INT NOT NULL,
+            `label`       VARCHAR(100) NOT NULL,
+            `action_type` ENUM('button','signature') NOT NULL DEFAULT 'button',
+            `sort_order`  INT NOT NULL DEFAULT 0,
+            FOREIGN KEY (`message_id`) REFERENCES `admin_messages`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Logy stisku akčních tlačítek trenéry
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `message_action_logs` (
+            `id`             INT AUTO_INCREMENT PRIMARY KEY,
+            `action_id`      INT NOT NULL,
+            `coach_id`       INT NOT NULL,
+            `pressed_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `ip_address`     VARCHAR(45),
+            `user_agent`     TEXT,
+            `signature_data` MEDIUMTEXT NULL,
+            UNIQUE KEY `uq_action_coach` (`action_id`, `coach_id`),
+            FOREIGN KEY (`action_id`) REFERENCES `message_actions`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`coach_id`)  REFERENCES `coaches`(`id`)          ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 }
