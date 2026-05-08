@@ -59,6 +59,7 @@ if (is_dir($logoDir)) {
     }
 }
 $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) : null;
+$showFormOnLoad = $_SERVER['REQUEST_METHOD'] === 'POST';
 ?>
 <!DOCTYPE html>
 <html lang="cs">
@@ -98,31 +99,33 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
 
         .login-wrap {
             width: 100%;
-            max-width: 500px;
+            max-width: 620px;
         }
 
         .brand {
             text-align: center;
-            margin-bottom: 18px;
+            margin-bottom: 8px;
         }
 
         .brand-stage {
             display: inline-block;
             background: linear-gradient(160deg, rgba(2, 6, 16, 0.95), rgba(10, 18, 35, 0.94));
             border: 1px solid rgba(243, 179, 0, 0.3);
-            border-radius: 14px;
-            padding: 10px;
+            border-radius: 16px;
+            padding: 16px;
             box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
+            transition: padding .4s ease, transform .4s ease, box-shadow .4s ease;
         }
 
         .brand-logo {
-            max-width: 300px;
+            max-width: min(72vw, 540px);
             width: 100%;
             height: auto;
             display: inline-block;
             cursor: pointer;
             user-select: none;
             border-radius: 8px;
+            transition: max-width .45s ease;
         }
 
         .brand-fallback {
@@ -136,10 +139,16 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             text-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
         }
 
-        .brand-subtitle {
-            color: #d3ddf6;
-            margin: 12px 0 0;
-            font-size: 1.05rem;
+        .intro-actions {
+            text-align: center;
+            margin-top: 16px;
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity .25s ease, transform .25s ease;
+        }
+
+        .intro-actions .btn-login {
+            width: min(92vw, 380px);
         }
 
         .login-card {
@@ -148,6 +157,12 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             border-radius: 18px;
             box-shadow: 0 18px 50px rgba(7, 18, 44, 0.45);
             overflow: hidden;
+            opacity: 0;
+            transform: translateY(20px);
+            max-height: 0;
+            margin-top: 0;
+            pointer-events: none;
+            transition: opacity .35s ease, transform .35s ease, max-height .4s ease, margin-top .35s ease;
         }
 
         .login-card .card-body {
@@ -203,11 +218,19 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             background: linear-gradient(180deg, #ffd34f 0%, #f7bc1f 100%);
         }
 
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
         .footer-meta {
             text-align: center;
             margin-top: 18px;
             color: #d0d9ee;
             font-size: 0.95rem;
+            opacity: 0;
+            transform: translateY(8px);
+            pointer-events: none;
+            transition: opacity .25s ease, transform .25s ease;
         }
 
         .footer-meta a {
@@ -220,6 +243,43 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             text-decoration: underline;
         }
 
+        body.show-form .login-wrap {
+            max-width: 500px;
+        }
+
+        body.show-form .brand-stage {
+            padding: 10px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+            transform: translateY(-2px);
+        }
+
+        body.show-form .brand-logo {
+            max-width: 300px;
+        }
+
+        body.show-form .intro-actions {
+            opacity: 0;
+            transform: translateY(-8px);
+            pointer-events: none;
+            height: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body.show-form .login-card {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 700px;
+            margin-top: 12px;
+            pointer-events: auto;
+        }
+
+        body.show-form .footer-meta {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
         @media (max-width: 575px) {
             .login-card .card-body {
                 padding: 22px 18px;
@@ -230,12 +290,16 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             }
 
             .brand-logo {
+                max-width: min(84vw, 440px);
+            }
+
+            body.show-form .brand-logo {
                 max-width: 240px;
             }
         }
     </style>
 </head>
-<body>
+<body class="<?= $showFormOnLoad ? 'show-form' : '' ?>">
     <div class="login-wrap">
         <div class="brand">
             <?php if ($logoUrl): ?>
@@ -249,7 +313,10 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             <?php else: ?>
                 <h1 id="brandLogo" class="brand-fallback" title="Dvojklik pro administraci"><?= h(APP_NAME) ?></h1>
             <?php endif; ?>
-            <p class="brand-subtitle">Aplikace pro trenéry</p>
+        </div>
+
+        <div class="intro-actions">
+            <button type="button" id="btnShowLogin" class="btn btn-login">Přihlášení</button>
         </div>
 
         <div class="card login-card">
@@ -293,9 +360,23 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    document.getElementById('brandLogo').addEventListener('dblclick', function () {
-        window.location.href = '<?= BASE_URL ?>/login_admin.php';
-    });
+    const brandLogo = document.getElementById('brandLogo');
+    if (brandLogo) {
+        brandLogo.addEventListener('dblclick', function () {
+            window.location.href = '<?= BASE_URL ?>/login_admin.php';
+        });
+    }
+
+    const btnShowLogin = document.getElementById('btnShowLogin');
+    if (btnShowLogin) {
+        btnShowLogin.addEventListener('click', function () {
+            document.body.classList.add('show-form');
+            setTimeout(function () {
+                const username = document.getElementById('username');
+                if (username) username.focus();
+            }, 260);
+        });
+    }
     </script>
 </body>
 </html>
