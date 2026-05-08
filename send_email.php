@@ -29,60 +29,14 @@ if (!$session || !$session['athlete_email']) {
 
 $coach     = getCurrentCoach();
 $exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
-$athleteName = $session['first_name'] . ' ' . $session['last_name'];
 
-// Sestavení e-mailu
-$subject = 'Tréninkový záznam – ' . $session['set_name'] . ' – ' . formatDate($session['completed_at']);
-
-$body = "Ahoj {$session['first_name']},\n\n";
-$body .= "posílám ti záznam z našeho tréninku.\n\n";
-$body .= "Datum: " . formatDateTime($session['completed_at']) . "\n";
-$body .= "Sada: " . $session['set_name'] . "\n";
-if ($session['location']) {
-    $body .= "Místo: " . $session['location'] . "\n";
-}
-$body .= "\n" . str_repeat("─", 40) . "\n\n";
-
-foreach ($exercises as $ex) {
-    $series = getSeriesForExercise($sessionId, $ex['exercise_id']);
-    $body  .= "CVIK {$ex['exercise_order']}: " . strtoupper($ex['exercise_name']) . "\n";
-    $body  .= sprintf("%-5s %-12s %-12s %-10s\n", "#", "Váha (kg)", "Opakování", "Dopomoc");
-    foreach ($series as $s) {
-        $assist = $s['assistance_reps'] > 0 ? $s['assistance_reps'] : '–';
-        $body  .= sprintf("%-5s %-12s %-12s %-10s\n",
-            $s['series_order'],
-            number_format($s['weight'], 1, ',', '') . ' kg',
-            $s['reps'],
-            $assist
-        );
-    }
-    $body .= "\n";
-}
-
-$body .= str_repeat("─", 40) . "\n";
-$body .= "\nS pozdravem,\n";
-$body .= ($coach['name'] ?: $coach['username']) . " – Trenér\n";
-$body .= "\n---\nZpráva vygenerována aplikací TrainerApp\n";
-
-// Odeslání
-$headers = [
-    'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
-    'Reply-To: ' . MAIL_FROM,
-    'X-Mailer: PHP/' . phpversion(),
-    'Content-Type: text/plain; charset=UTF-8',
-];
-
-$sent = mail(
-    $session['athlete_email'],
-    '=?UTF-8?B?' . base64_encode($subject) . '?=',
-    $body,
-    implode("\r\n", $headers)
-);
+$sent = sendTrainingEmail($session['athlete_email'], $session, $exercises, $coach);
 
 if ($sent) {
-    flash('success', "E-mail byl odeslán na {$session['athlete_email']}.");
+    flash('success', 'E-mail byl odeslán na ' . $session['athlete_email'] . '.');
 } else {
-    flash('danger', 'E-mail se nepodařilo odeslat. Zkontrolujte nastavení PHP mail() na serveru.');
+    flash('danger', 'E-mail se nepodařilo odeslat. Zkontrolujte SMTP nastavení.');
 }
 
 redirect(BASE_URL . '/training_detail.php?id=' . $sessionId);
+

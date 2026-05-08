@@ -24,7 +24,19 @@ function isLoggedIn(): bool {
 
 function requireLogin(): void {
     if (!isLoggedIn()) {
-        header('Location: ' . BASE_URL . '/login.php');
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+        $adminPrefix = '';
+        if ($script !== '' && preg_match('#^(.*)/admin/[^/]+\\.php$#', $script, $m)) {
+            $adminPrefix = rtrim(($m[1] ?? ''), '/');
+        }
+
+        if ($adminPrefix !== '') {
+            header('Location: ' . $adminPrefix . '/login_admin.php');
+        } elseif (strpos($script, '/admin/') === 0) {
+            header('Location: /login_admin.php');
+        } else {
+            header('Location: ' . BASE_URL . '/login.php');
+        }
         exit;
     }
 }

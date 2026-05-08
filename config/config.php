@@ -28,14 +28,67 @@ if (!defined('SMTP_PASS'))      define('SMTP_PASS',      '');
 if (!defined('SMTP_FROM'))      define('SMTP_FROM',      'noreply@example.com');
 if (!defined('SMTP_FROM_NAME')) define('SMTP_FROM_NAME', 'TrainerApp');
 
-// BASE_URL: env.php muze nastavit vlastni hodnotu; vychozi pro lokalni dev
+// BASE_URL: automaticka detekce z DOCUMENT_ROOT (env.php muze prepsat)
 if (!defined('BASE_URL')) {
-    define('BASE_URL', '/marcelmiler');
+    if (php_sapi_name() === 'cli') {
+        define('BASE_URL', '');
+    } else {
+        $__baseUrl = '';
+        $__appRoot = realpath(dirname(__DIR__));
+        $__scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? realpath($_SERVER['SCRIPT_FILENAME']) : false;
+        $__scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+
+        // Nejpresnejsi varianta: porovnat fyzickou cestu skriptu s URL skriptu.
+        if ($__appRoot && $__scriptFile && $__scriptName !== '') {
+            $__appRootN = rtrim(str_replace('\\', '/', $__appRoot), '/');
+            $__scriptFileN = str_replace('\\', '/', $__scriptFile);
+            if (strncmp($__scriptFileN, $__appRootN, strlen($__appRootN)) === 0) {
+                $__relativeScript = ltrim(substr($__scriptFileN, strlen($__appRootN)), '/');
+                $__scriptNameN = '/' . ltrim($__scriptName, '/');
+                if ($__relativeScript !== '') {
+                    $__suffix = '/' . $__relativeScript;
+                    if (substr($__scriptNameN, -strlen($__suffix)) === $__suffix) {
+                        $__baseUrl = substr($__scriptNameN, 0, -strlen($__suffix));
+                    }
+                }
+            }
+        }
+
+        // Fallback: odhad z DOCUMENT_ROOT, pokud je dostupny.
+        if ($__baseUrl === '') {
+            $__docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
+            if ($__docRoot && $__appRoot) {
+                $__docRootN = rtrim(str_replace('\\', '/', $__docRoot), '/');
+                $__appRootN = rtrim(str_replace('\\', '/', $__appRoot), '/');
+                if ($__docRootN !== '' && strncmp($__appRootN, $__docRootN, strlen($__docRootN)) === 0) {
+                    $__baseUrl = substr($__appRootN, strlen($__docRootN));
+                }
+            }
+        }
+
+        $__baseUrl = trim((string)$__baseUrl);
+        if ($__baseUrl === '/' || $__baseUrl === '.') {
+            $__baseUrl = '';
+        }
+        if ($__baseUrl !== '' && $__baseUrl[0] !== '/') {
+            $__baseUrl = '/' . $__baseUrl;
+        }
+        $__baseUrl = rtrim($__baseUrl, '/');
+
+        define('BASE_URL', $__baseUrl);
+        unset($__baseUrl, $__appRoot, $__scriptFile, $__scriptName);
+        unset($__appRootN, $__scriptFileN, $__relativeScript, $__scriptNameN, $__suffix);
+        unset($__docRoot, $__docRootN);
+    }
 }
 
-// SESSION_SECURE: true na produkci (HTTPS), false lokalne
+// SESSION_SECURE: automaticka detekce HTTPS (env.php muze prepsat)
 if (!defined('SESSION_SECURE')) {
-    define('SESSION_SECURE', false);
+    define('SESSION_SECURE',
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+        (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+    );
 }
 // ENABLE_SETUP_ADMIN: bezpecnostni pojistka pro setup_admin.php
 // Na produkci ponechat vzdy false; docasne zapnout jen pri zrizeni admina.

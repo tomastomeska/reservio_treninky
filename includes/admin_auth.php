@@ -23,9 +23,35 @@ function isAdminLoggedIn(): bool {
     return !empty($_SESSION['superadmin_id']);
 }
 
+/**
+ * Vrati URL zaklad aplikace (napr. '', '/marcelmiler') i pri nepresnem BASE_URL.
+ * Pouziva BASE_URL, ale pro admin skripty ma bezpecny fallback z REQUEST/SCRIPT_NAME.
+ */
+function adminBaseUrl(): string {
+    if (defined('BASE_URL') && BASE_URL !== '') {
+        return BASE_URL;
+    }
+
+    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    if ($script === '') {
+        return '';
+    }
+
+    if (preg_match('#^(.*)/(admin/[^/]+\\.php|login_admin\\.php|logout_admin\\.php)$#', $script, $m)) {
+        $base = $m[1] ?? '';
+        return ($base === '/' || $base === '.') ? '' : rtrim($base, '/');
+    }
+
+    $dir = str_replace('\\', '/', dirname($script));
+    if ($dir === '/' || $dir === '\\' || $dir === '.') {
+        return '';
+    }
+    return rtrim($dir, '/');
+}
+
 function requireAdminLogin(): void {
     if (!isAdminLoggedIn()) {
-        header('Location: ' . BASE_URL . '/login_admin.php');
+        header('Location: ' . adminBaseUrl() . '/login_admin.php');
         exit;
     }
 }

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `coaches` (
     `password`   VARCHAR(255) NOT NULL,
     `name`       VARCHAR(200),
     `email`      VARCHAR(255),
+    `last_login` DATETIME NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -112,6 +113,7 @@ CREATE TABLE IF NOT EXISTS `superadmins` (
     `password`   VARCHAR(255) NOT NULL,
     `name`       VARCHAR(200),
     `email`      VARCHAR(255),
+    `last_login` DATETIME NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

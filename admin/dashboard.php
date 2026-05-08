@@ -1,9 +1,10 @@
 <?php
 // admin/dashboard.php – přehled superadministrátora
 require_once __DIR__ . '/../includes/admin_auth.php';
-require_once __DIR__ . '/header.php';
 
 requireAdminLogin();
+
+require_once __DIR__ . '/header.php';
 
 $pdo = getDB();
 

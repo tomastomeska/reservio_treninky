@@ -132,6 +132,12 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
+    // last_login pro superadminy (starsi instalace sloupec nemaji)
+    $stmtSALogin = $pdo->query("SHOW COLUMNS FROM superadmins LIKE 'last_login'");
+    if (!$stmtSALogin->fetch()) {
+        $pdo->exec('ALTER TABLE superadmins ADD COLUMN last_login DATETIME NULL');
+    }
+
     // Aktivni stav trenera
     $stmtAct = $pdo->query("SHOW COLUMNS FROM coaches LIKE 'is_active'");
     if (!$stmtAct->fetch()) {

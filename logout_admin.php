@@ -6,4 +6,4 @@ require_once __DIR__ . '/includes/admin_auth.php';
 unset($_SESSION['superadmin_id'], $_SESSION['superadmin_name']);
 session_regenerate_id(true);
 
-redirect(BASE_URL . '/login_admin.php');
+redirect(adminBaseUrl() . '/login_admin.php');

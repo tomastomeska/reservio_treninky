@@ -423,6 +423,307 @@ function photoUrl(?string $filename, string $subDir): string {
 }
 
 /**
+ * Odešle e-mail sportovci se souhrnem dokončeného tréninku přes SMTP (PHPMailer).
+ * Vrátí true při úspěchu, false při chybě.
+ *
+ * @param string $toEmail     E-mail sportovce
+ * @param array  $session     Řádek training_sessions (+ set_name, first_name, last_name, location, notes, completed_at)
+ * @param array  $exercises   Výsledek getSessionExercises()
+ * @param array  $coach       Řádek coaches (name, username)
+ */
+function sendTrainingEmail(string $toEmail, array $session, array $exercises, array $coach): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        error_log('sendTrainingEmail: PHPMailer not found at ' . $phpmailerSrc);
+        return false;
+    }
+
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $h = fn(?string $s): string => htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8');
+
+    $athleteFirstName = $session['first_name'];
+    $coachName        = $coach['name'] ?: $coach['username'];
+    $setName          = $session['set_name'];
+    $completedAt      = formatDateTime($session['completed_at']);
+    $location         = $session['location'] ?? '';
+    $notes            = $session['notes']    ?? '';
+
+    // ── Sestavení řádků cvičení (HTML + plain) ──────────────────────────────
+    $exerciseRowsHtml  = '';
+    $exerciseRowsPlain = '';
+    $totalSeries       = 0;
+
+    foreach ($exercises as $i => $ex) {
+        $series = getSeriesForExercise((int)$session['id'], (int)$ex['exercise_id']);
+        if (empty($series)) continue;
+
+        $totalSeries += count($series);
+        $bgHeader  = ($i % 2 === 0) ? '#1e1b4b' : '#312e81';
+        $bgRow     = ($i % 2 === 0) ? '#f9fafb' : '#f3f4f6';
+
+        $exerciseRowsHtml .= <<<HTML
+        <tr>
+          <td colspan="4" style="background:{$bgHeader};color:#e9d5ff;font-size:12px;font-weight:700;
+              letter-spacing:.8px;padding:10px 16px;text-transform:uppercase;">
+            {$h((string)$ex['exercise_order'])}. {$h($ex['exercise_name'])}
+          </td>
+        </tr>
+        HTML;
+
+        $exerciseRowsPlain .= strtoupper($ex['exercise_order'] . '. ' . $ex['exercise_name']) . "\n";
+        $exerciseRowsPlain .= sprintf("  %-4s %-10s %-10s %-10s\n", '#', 'Váha', 'Opa.', 'Dopomoc');
+
+        foreach ($series as $s) {
+            $assist = $s['assistance_reps'] > 0 ? $s['assistance_reps'] . 'x' : '–';
+            $weight = number_format((float)$s['weight'], 1, ',', '') . ' kg';
+            $reps   = $s['reps'] . 'x';
+            $assistColor = $s['assistance_reps'] > 0 ? '#b45309' : '#9ca3af';
+
+            $exerciseRowsHtml .= <<<HTML
+            <tr style="background:{$bgRow};border-bottom:1px solid #e5e7eb;">
+              <td style="padding:9px 16px;color:#6b7280;font-size:12px;width:36px;text-align:center;">
+                {$h((string)$s['series_order'])}.
+              </td>
+              <td style="padding:9px 8px;font-weight:700;color:#111827;font-size:14px;">
+                {$h($weight)}
+              </td>
+              <td style="padding:9px 8px;color:#374151;font-size:14px;">
+                {$h($reps)}
+              </td>
+              <td style="padding:9px 16px;color:{$assistColor};font-size:13px;">
+                {$h($assist)}
+              </td>
+            </tr>
+            HTML;
+
+            $exerciseRowsPlain .= sprintf("  %-4s %-10s %-10s %-10s\n",
+                $s['series_order'] . '.',
+                $weight,
+                $reps,
+                $assist
+            );
+        }
+        $exerciseRowsPlain .= "\n";
+    }
+
+    // ── Volitelné bloky ─────────────────────────────────────────────────────
+    $locationHtml = '';
+    if ($location !== '') {
+        $locationHtml = '<td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #e5e7eb;width:110px;">
+                            📍 Místo</td>
+                         <td style="padding:8px 0;color:#374151;font-size:13px;font-weight:600;border-top:1px solid #e5e7eb;">'
+                         . $h($location) . '</td>';
+    }
+    $notesHtml = '';
+    if ($notes !== '') {
+        $notesHtml = <<<HTML
+        <tr>
+          <td style="padding:20px 32px 0;">
+            <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:4px;padding:12px 16px;">
+              <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;
+                         letter-spacing:.5px;">Poznámky trenéra</p>
+              <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">{$h($notes)}</p>
+            </div>
+          </td>
+        </tr>
+        HTML;
+    }
+
+    // ── Statistika ───────────────────────────────────────────────────────────
+    $exCount     = count($exercises);
+    $statExercises = $exCount  . ' ' . ($exCount  === 1 ? 'cvik'   : ($exCount  < 5 ? 'cviky'   : 'cviků'));
+    $statSeries    = $totalSeries . ' ' . ($totalSeries === 1 ? 'série' : ($totalSeries < 5 ? 'série' : 'sérií'));
+
+    // ── HTML šablona ─────────────────────────────────────────────────────────
+    $htmlBody = <<<HTML
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tréninkový záznam</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0;">
+<tr><td align="center">
+<table width="100%" style="max-width:580px;background:#ffffff;border-radius:14px;
+       overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+
+  <!-- ░░ HLAVIČKA ░░ -->
+  <tr>
+    <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#a78bfa 100%);
+               padding:40px 36px 32px;text-align:center;">
+      <div style="font-size:40px;line-height:1;margin-bottom:12px;">💪</div>
+      <h1 style="margin:0 0 6px;color:#ffffff;font-size:24px;font-weight:800;letter-spacing:.3px;">
+        Trénink dokončen!
+      </h1>
+      <p style="margin:0;color:#c4b5fd;font-size:14px;">
+        Skvělá práce, {$h($athleteFirstName)}!
+      </p>
+    </td>
+  </tr>
+
+  <!-- ░░ METADATA TRÉNINKU ░░ -->
+  <tr>
+    <td style="padding:28px 32px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0"
+             style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+        <tr>
+          <td style="padding:16px 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:8px 0;color:#6b7280;font-size:13px;width:110px;">📋 Tréninkový plán</td>
+                <td style="padding:8px 0;color:#111827;font-size:13px;font-weight:700;">{$h($setName)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #e5e7eb;">🗓️ Datum</td>
+                <td style="padding:8px 0;color:#374151;font-size:13px;border-top:1px solid #e5e7eb;">{$h($completedAt)}</td>
+              </tr>
+              {$locationHtml}
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ░░ STATISTIKY ░░ -->
+  <tr>
+    <td style="padding:20px 32px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="50%" style="padding:0 6px 0 0;">
+            <div style="background:#ede9fe;border-radius:10px;padding:16px;text-align:center;">
+              <div style="font-size:26px;font-weight:800;color:#5b21b6;line-height:1;">{$exCount}</div>
+              <div style="font-size:11px;color:#7c3aed;font-weight:600;text-transform:uppercase;
+                           letter-spacing:.6px;margin-top:4px;">Cviky</div>
+            </div>
+          </td>
+          <td width="50%" style="padding:0 0 0 6px;">
+            <div style="background:#dbeafe;border-radius:10px;padding:16px;text-align:center;">
+              <div style="font-size:26px;font-weight:800;color:#1d4ed8;line-height:1;">{$totalSeries}</div>
+              <div style="font-size:11px;color:#2563eb;font-weight:600;text-transform:uppercase;
+                           letter-spacing:.6px;margin-top:4px;">Série</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  {$notesHtml}
+
+  <!-- ░░ TABULKA CVIKŮ ░░ -->
+  <tr>
+    <td style="padding:24px 32px 0;">
+      <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#374151;
+                text-transform:uppercase;letter-spacing:.6px;">Podrobný záznam</p>
+      <table width="100%" cellpadding="0" cellspacing="0"
+             style="border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+        {$exerciseRowsHtml}
+      </table>
+    </td>
+  </tr>
+
+  <!-- ░░ MOTIVAČNÍ TEXT ░░ -->
+  <tr>
+    <td style="padding:28px 32px;">
+      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:10px;
+                  padding:20px 24px;text-align:center;">
+        <div style="font-size:22px;margin-bottom:8px;">🏆</div>
+        <p style="margin:0;font-size:14px;color:#166534;line-height:1.7;">
+          Každý odcvičený trénink tě posouvá blíž k cíli.<br>
+          <strong>Uvidíme se na dalším!</strong>
+        </p>
+      </div>
+    </td>
+  </tr>
+
+  <!-- ░░ PODPIS ░░ -->
+  <tr>
+    <td style="padding:0 32px 32px;">
+      <p style="margin:0;font-size:14px;color:#374151;">S pozdravem,<br>
+        <strong style="color:#111827;">{$h($coachName)}</strong>
+        <span style="color:#6b7280;font-size:13px;"> – Tvůj trenér</span>
+      </p>
+    </td>
+  </tr>
+
+  <!-- ░░ PATIČKA ░░ -->
+  <tr>
+    <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 32px;text-align:center;">
+      <p style="margin:0 0 4px;color:#9ca3af;font-size:11px;">
+        Zpráva vygenerována aplikací <strong style="color:#6b7280;">TrainerApp</strong>
+      </p>
+      <p style="margin:0;color:#9ca3af;font-size:11px;">
+        Vytvořil <strong style="color:#6b7280;">Tomáš Tomeška</strong>
+        &nbsp;·&nbsp;
+        <a href="mailto:tomas.tomeska@seznam.cz" style="color:#7c3aed;text-decoration:none;">tomas.tomeska@seznam.cz</a>
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+HTML;
+
+    // ── Plain-text alternativa ───────────────────────────────────────────────
+    $altBody  = "Ahoj {$athleteFirstName},\n\n";
+    $altBody .= "posílám ti záznam z dnešního tréninku. Skvělá práce!\n\n";
+    $altBody .= "Tréninkový plán: {$setName}\n";
+    $altBody .= "Datum: {$completedAt}\n";
+    if ($location !== '') $altBody .= "Místo: {$location}\n";
+    $altBody .= "\n" . str_repeat('─', 42) . "\n\n";
+    $altBody .= $exerciseRowsPlain;
+    $altBody .= str_repeat('─', 42) . "\n\n";
+    if ($notes !== '') $altBody .= "Poznámky trenéra:\n{$notes}\n\n";
+    $altBody .= "S pozdravem,\n{$coachName} – Tvůj trenér\n\n";
+    $altBody .= "---\nZpráva vygenerována aplikací TrainerApp\n";
+
+    // ── Odeslání ─────────────────────────────────────────────────────────────
+    $subject = 'Tréninkový záznam – ' . $setName . ' – ' . formatDate($session['completed_at']);
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        $mail->CharSet    = 'UTF-8';
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer'       => false,
+                'verify_peer_name'  => false,
+                'allow_self_signed' => true,
+            ],
+        ];
+
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $altBody;
+
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendTrainingEmail error: ' . $mail->ErrorInfo . ' | Exception: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
  * Odešle uvítací e-mail trenérovi s přihlašovacími údaji přes SMTP (PHPMailer).
  * Vrátí true při úspěchu, false při chybě.
  */

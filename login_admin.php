@@ -3,9 +3,11 @@
 // Tato stránka není linkována z aplikace – přístup pouze přes přímou URL.
 require_once __DIR__ . '/includes/admin_auth.php';
 
+$adminBase = adminBaseUrl();
+
 // Přesměrovat přihlášeného admina
 if (isAdminLoggedIn()) {
-    redirect(BASE_URL . '/admin/dashboard.php');
+    redirect($adminBase . '/admin/coaches.php');
 }
 
 $error = null;
@@ -29,9 +31,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 $_SESSION['superadmin_id']   = $admin['id'];
                 $_SESSION['superadmin_name'] = $admin['name'] ?: $username;
-                // Aktualizace posledního přihlášení
-                $pdo->prepare('UPDATE superadmins SET last_login = NOW() WHERE id = ?')->execute([$admin['id']]);
-                redirect(BASE_URL . '/admin/dashboard.php');
+                // Aktualizace posledního přihlášení nesmí blokovat samotné přihlášení.
+                try {
+                    $pdo->prepare('UPDATE superadmins SET last_login = NOW() WHERE id = ?')->execute([$admin['id']]);
+                } catch (Throwable $e) {
+                    error_log('Admin last_login update failed: ' . $e->getMessage());
+                }
+                redirect($adminBase . '/admin/coaches.php');
             } else {
                 // Záměrné zpoždění pro ochranu proti brute-force
                 usleep(500000);
@@ -49,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Administrace – <?= APP_NAME ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= $adminBase ?>/assets/css/style.css">
     <style>
         body { background: #0f0f1a; min-height: 100vh; display: flex; align-items: center; }
         .admin-card { border: 1px solid #312e81; background: #1e1e2e; }
@@ -96,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     <p class="text-center mt-3 small text-secondary">
-        <a href="<?= BASE_URL ?>/login.php" class="text-secondary">← Zpět na přihlášení trenérů</a>
+        <a href="<?= $adminBase ?>/login.php" class="text-secondary">← Zpět na přihlášení trenérů</a>
     </p>
 </div>
 </body>
