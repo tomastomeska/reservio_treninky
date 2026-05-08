@@ -1057,6 +1057,7 @@ function _configureMail(object $mail): void {
     $host = defined('SMTP_HOST') ? SMTP_HOST : '';
     if ($host === '' || $host === 'localhost' || $host === '127.0.0.1') {
         $mail->isMail();
+        $mail->CharSet = 'UTF-8';
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         return;
     }
@@ -1099,6 +1100,7 @@ function sendTestEmail(string $toEmail): string {
     try {
         if ($useSendmail) {
             $mail->isMail();
+            $mail->CharSet = 'UTF-8';
             $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         } else {
             $mail->isSMTP();
