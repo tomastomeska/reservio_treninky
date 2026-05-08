@@ -1050,13 +1050,13 @@ HTML;
 
 /**
  * Nakonfiguruje PHPMailer instanci dle SMTP_HOST:
- * - 'localhost' nebo prázdný host → isSendmail() (bez auth, Wedos hosting)
+ * - 'localhost' nebo prázdný host → isMail() (PHP mail(), bez auth, Wedos hosting)
  * - jinak → isSMTP() s STARTTLS a autentizací
  */
 function _configureMail(object $mail): void {
     $host = defined('SMTP_HOST') ? SMTP_HOST : '';
     if ($host === '' || $host === 'localhost' || $host === '127.0.0.1') {
-        $mail->isSendmail();
+        $mail->isMail();
         $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         return;
     }
@@ -1098,7 +1098,7 @@ function sendTestEmail(string $toEmail): string {
 
     try {
         if ($useSendmail) {
-            $mail->isSendmail();
+            $mail->isMail();
             $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
         } else {
             $mail->isSMTP();
