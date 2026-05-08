@@ -69,8 +69,8 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <style>
         :root {
-            --brand-dark: #0e1f45;
-            --brand-darker: #08142e;
+            --brand-dark: #101f46;
+            --brand-darker: #070d1e;
             --brand-gold: #f3b300;
             --panel-bg: rgba(255, 255, 255, 0.97);
             --text-main: #1b2433;
@@ -86,9 +86,9 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
             margin: 0;
             font-family: "Segoe UI", "Trebuchet MS", sans-serif;
             background:
-                radial-gradient(1100px 700px at -10% 110%, rgba(243, 179, 0, 0.28), transparent 52%),
-                radial-gradient(850px 540px at 120% -5%, rgba(88, 130, 255, 0.28), transparent 55%),
-                linear-gradient(140deg, var(--brand-darker), #10275b 55%, var(--brand-dark));
+                radial-gradient(900px 600px at 12% 90%, rgba(243, 179, 0, 0.16), transparent 60%),
+                radial-gradient(820px 560px at 100% 10%, rgba(30, 73, 170, 0.28), transparent 58%),
+                linear-gradient(150deg, #050b18 0%, #0a1531 30%, #11285f 68%, #132d6e 100%);
             color: var(--text-main);
             display: flex;
             align-items: center;
@@ -103,17 +103,26 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
 
         .brand {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
+        }
+
+        .brand-stage {
+            display: inline-block;
+            background: linear-gradient(160deg, rgba(2, 6, 16, 0.95), rgba(10, 18, 35, 0.94));
+            border: 1px solid rgba(243, 179, 0, 0.3);
+            border-radius: 14px;
+            padding: 10px;
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
         }
 
         .brand-logo {
-            max-width: 220px;
+            max-width: 300px;
             width: 100%;
             height: auto;
             display: inline-block;
             cursor: pointer;
             user-select: none;
-            filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
+            border-radius: 8px;
         }
 
         .brand-fallback {
@@ -128,9 +137,9 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
         }
 
         .brand-subtitle {
-            color: #d6deef;
-            margin: 10px 0 0;
-            font-size: 1.1rem;
+            color: #d3ddf6;
+            margin: 12px 0 0;
+            font-size: 1.05rem;
         }
 
         .login-card {
@@ -142,12 +151,12 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
         }
 
         .login-card .card-body {
-            padding: 30px 24px;
+            padding: 26px 24px;
         }
 
         .login-title {
             text-align: center;
-            font-size: 2rem;
+            font-size: 1.85rem;
             margin: 0 0 4px;
             font-weight: 800;
             color: #0f234f;
@@ -166,10 +175,10 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
         }
 
         .form-control {
-            border-radius: 12px;
+            border-radius: 10px;
             border: 2px solid #d8dfeb;
-            min-height: 52px;
-            font-size: 1rem;
+            min-height: 44px;
+            font-size: 0.98rem;
         }
 
         .form-control:focus {
@@ -178,11 +187,11 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
         }
 
         .btn-login {
-            min-height: 54px;
+            min-height: 46px;
             border: 0;
-            border-radius: 12px;
+            border-radius: 10px;
             font-weight: 800;
-            font-size: 1.25rem;
+            font-size: 1.05rem;
             color: #10275b;
             background: linear-gradient(180deg, #ffca2f 0%, #f3b300 100%);
             box-shadow: 0 8px 18px rgba(243, 179, 0, 0.35);
@@ -213,11 +222,15 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
 
         @media (max-width: 575px) {
             .login-card .card-body {
-                padding: 24px 18px;
+                padding: 22px 18px;
             }
 
             .login-title {
-                font-size: 1.7rem;
+                font-size: 1.55rem;
+            }
+
+            .brand-logo {
+                max-width: 240px;
             }
         }
     </style>
@@ -226,11 +239,13 @@ $logoUrl = $logoFile ? (BASE_URL . '/uploads/logo/' . rawurlencode($logoFile)) :
     <div class="login-wrap">
         <div class="brand">
             <?php if ($logoUrl): ?>
-                <img src="<?= h($logoUrl) ?>"
-                     alt="<?= h(APP_NAME) ?>"
-                     id="brandLogo"
-                     class="brand-logo"
-                     title="Dvojklik pro administraci">
+                <div class="brand-stage">
+                    <img src="<?= h($logoUrl) ?>"
+                         alt="<?= h(APP_NAME) ?>"
+                         id="brandLogo"
+                         class="brand-logo"
+                         title="Dvojklik pro administraci">
+                </div>
             <?php else: ?>
                 <h1 id="brandLogo" class="brand-fallback" title="Dvojklik pro administraci"><?= h(APP_NAME) ?></h1>
             <?php endif; ?>
