@@ -36,6 +36,9 @@ $actStmt = $pdo->prepare("
 $actStmt->execute([$coachId, $id]);
 $actions = $actStmt->fetchAll();
 
+// Detekce: má trenér již stisknuté JAKÉKOLI tlačítko pro tuto zprávu?
+$anyPressed = array_filter($actions, fn($a) => $a['pressed_at'] !== null) !== [];
+
 // Zpracování potvrzení přečtení
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm_read') {
     if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
@@ -120,6 +123,11 @@ renderHeader('Zpráva: ' . $message['subject']);
                 <div><span class="badge bg-success"><i class="fas fa-check me-1"></i><?= h($act['label']) ?></span></div>
                 <small class="text-muted"><?= date('d.m.Y H:i', strtotime($act['pressed_at'])) ?></small>
             </div>
+            <?php elseif ($anyPressed && !$done): ?>
+            <button class="btn btn-warning disabled opacity-50" disabled>
+                <i class="fas fa-signature me-1"></i><?= h($act['label']) ?>
+                <small class="d-block" style="font-size:.72rem">Jiná volba již zvolena</small>
+            </button>
             <?php else: ?>
             <button type="button" class="btn btn-warning"
                     data-action-id="<?= $act['id'] ?>"
@@ -130,9 +138,14 @@ renderHeader('Zpráva: ' . $message['subject']);
             <?php endif; ?>
         <?php else: ?>
             <?php if ($done): ?>
-            <button class="btn btn-primary disabled opacity-75" disabled>
+            <button class="btn btn-success disabled" disabled>
                 <i class="fas fa-check me-1"></i><?= h($act['label']) ?>
                 <small class="d-block" style="font-size:.72rem"><?= date('d.m.Y H:i', strtotime($act['pressed_at'])) ?></small>
+            </button>
+            <?php elseif ($anyPressed && !$done): ?>
+            <button class="btn btn-secondary disabled opacity-50" disabled>
+                <?= h($act['label']) ?>
+                <small class="d-block" style="font-size:.72rem">Jiná volba již zvolena</small>
             </button>
             <?php else: ?>
             <button type="button" class="btn btn-primary"
@@ -332,12 +345,21 @@ document.querySelectorAll('[data-action-id]').forEach(btn => {
         if (actionType === 'signature') {
             openSignModal(actionId, label);
         } else {
+            const confirmed = await confirmAction(this.textContent.trim());
+            if (!confirmed) return;
             this.disabled = true;
-            await sendAction(actionId, null);
-            this.innerHTML = '<i class="fas fa-check me-1"></i>' + this.textContent.trim();
+            const ok = await sendAction(actionId, null);
+            if (ok) { location.reload(); }
         }
     });
 });
+
+function confirmAction(label) {
+    return new Promise(resolve => {
+        const msg = 'Opravdu chcete potvrdit volbu:\n"' + label + '"?\n\nTuto volbu nelze po potvrzení změnit.';
+        resolve(window.confirm(msg));
+    });
+}
 
 async function sendAction(actionId, signatureData) {
     const fd = new FormData();

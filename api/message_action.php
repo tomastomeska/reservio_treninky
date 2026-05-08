@@ -45,6 +45,20 @@ if (!$action) {
     exit;
 }
 
+// Blokace: pokud trenér stiskl jiné tlačítko pro tuto zprávu, odmítnout
+$alreadyStmt = $pdo->prepare("
+    SELECT l.action_id FROM message_action_logs l
+    JOIN message_actions a ON a.id = l.action_id
+    WHERE a.message_id = ? AND l.coach_id = ? AND l.action_id != ?
+    LIMIT 1
+");
+$alreadyStmt->execute([$action['message_id'], $coachId, $actionId]);
+if ($alreadyStmt->fetch()) {
+    http_response_code(409);
+    echo json_encode(['error' => 'Jinou volbu jste již potvrdil. Volbu nelze změnit.']);
+    exit;
+}
+
 // Signature data – pouze pro typ signature, validace base64 PNG
 $signatureData = null;
 if ($action['action_type'] === 'signature' && !empty($_POST['signature_data'])) {
