@@ -265,6 +265,8 @@ const ACTION_URL = <?= json_encode(BASE_URL . '/api/message_action.php') ?>;
 let   confirmed  = false;
 let   pendingUrl = null;
 
+window.addEventListener('load', function() {
+
 // ── Prevence odchodu bez potvrzení ─────────────────────────
 if (IS_UNREAD) {
     const leaveModalEl = document.getElementById('leaveModal');
@@ -410,6 +412,8 @@ document.getElementById('btnSubmitSign').addEventListener('click', async functio
         location.reload();
     }
 });
+
+}); // end window load
 </script>
 
 <?php renderFooter(); ?>

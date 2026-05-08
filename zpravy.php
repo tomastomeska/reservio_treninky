@@ -41,7 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('success', 'Zpráva byla trvale smazána.');
         }
     }
-    redirect(BASE_URL . '/zpravy.php' . ($_GET['tab'] ? '?tab=' . urlencode($_GET['tab'] ?? '') : ''));
+    $redirectTab = $_GET['tab'] ?? '';
+    redirect(BASE_URL . '/zpravy.php' . ($redirectTab ? '?tab=' . urlencode($redirectTab) : ''));
 }
 
 $tab = in_array($_GET['tab'] ?? '', ['archived','deleted']) ? $_GET['tab'] : 'inbox';
