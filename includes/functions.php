@@ -691,32 +691,12 @@ HTML;
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->AuthType   = 'LOGIN';
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = SMTP_PASS;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true,
-                'ciphers'           => 'DEFAULT:@SECLEVEL=0',
-            ],
-        ];
-
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        _configureMail($mail);
         $mail->addAddress($toEmail);
-
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
         $mail->AltBody = $altBody;
-
         $mail->send();
         return true;
     } catch (\Exception $e) {
@@ -861,25 +841,7 @@ HTML;
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->AuthType   = 'LOGIN';
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = SMTP_PASS;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer'       => false,
-                'verify_peer_name'  => false,
-                'allow_self_signed' => true,
-                'ciphers'           => 'DEFAULT:@SECLEVEL=0',
-            ],
-        ];
-
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        _configureMail($mail);
         $mail->addAddress($toEmail);
 
         $mail->isHTML(true);
@@ -977,17 +939,7 @@ HTML;
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->AuthType   = 'LOGIN';
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = SMTP_PASS;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        _configureMail($mail);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = 'Blíží se narozeniny: ' . $fullName . ' (' . $bdFormatted . ')';
@@ -1082,17 +1034,7 @@ HTML;
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->AuthType   = 'LOGIN';
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = SMTP_PASS;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        _configureMail($mail);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = 'Narozeniny: ' . $fullName . ' slaví dnes ' . $age . ' let!';
@@ -1107,7 +1049,37 @@ HTML;
 }
 
 /**
- * Odešle testovací email přes SMTP. Vrátí true nebo chybovou zprávu.
+ * Nakonfiguruje PHPMailer instanci dle SMTP_HOST:
+ * - 'localhost' nebo prázdný host → isSendmail() (bez auth, Wedos hosting)
+ * - jinak → isSMTP() s STARTTLS a autentizací
+ */
+function _configureMail(object $mail): void {
+    $host = defined('SMTP_HOST') ? SMTP_HOST : '';
+    if ($host === '' || $host === 'localhost' || $host === '127.0.0.1') {
+        $mail->isSendmail();
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        return;
+    }
+    $mail->isSMTP();
+    $mail->Host       = $host;
+    $mail->SMTPAuth   = true;
+    $mail->AuthType   = 'LOGIN';
+    $mail->Username   = SMTP_USER;
+    $mail->Password   = SMTP_PASS;
+    $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port       = defined('SMTP_PORT') ? SMTP_PORT : 587;
+    $mail->CharSet    = 'UTF-8';
+    $mail->SMTPOptions = ['ssl' => [
+        'verify_peer'       => false,
+        'verify_peer_name'  => false,
+        'allow_self_signed' => true,
+        'ciphers'           => 'DEFAULT:@SECLEVEL=0',
+    ]];
+    $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+}
+
+/**
+ * Odešle testovací email. Vrátí 'ok' nebo chybovou zprávu.
  */
 function sendTestEmail(string $toEmail): string {
     $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
@@ -1118,33 +1090,44 @@ function sendTestEmail(string $toEmail): string {
     require_once $phpmailerSrc . '/PHPMailer.php';
     require_once $phpmailerSrc . '/SMTP.php';
 
+    $host     = defined('SMTP_HOST') ? SMTP_HOST : '';
+    $useSendmail = ($host === '' || $host === 'localhost' || $host === '127.0.0.1');
+
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     $debugLog = '';
+
     try {
-        $mail->isSMTP();
-        $mail->SMTPDebug  = 3; // zachytí vše (client+server+connection)
-        $mail->Debugoutput = function (string $str, int $level) use (&$debugLog): void {
-            $debugLog .= trim($str) . "\n";
-        };
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->AuthType   = 'LOGIN'; // Wedos preferuje LOGIN
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = SMTP_PASS;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        if ($useSendmail) {
+            $mail->isSendmail();
+            $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        } else {
+            $mail->isSMTP();
+            $mail->SMTPDebug   = 3;
+            $mail->Debugoutput = function (string $str, int $level) use (&$debugLog): void {
+                $debugLog .= trim($str) . "\n";
+            };
+            $mail->Host       = $host;
+            $mail->SMTPAuth   = true;
+            $mail->AuthType   = 'LOGIN';
+            $mail->Username   = SMTP_USER;
+            $mail->Password   = SMTP_PASS;
+            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = defined('SMTP_PORT') ? SMTP_PORT : 587;
+            $mail->CharSet    = 'UTF-8';
+            $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true, 'ciphers' => 'DEFAULT:@SECLEVEL=0']];
+            $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        }
+
         $mail->addAddress($toEmail);
         $mail->isHTML(false);
         $mail->Subject = 'Testovací e-mail z TrainerApp';
-        $mail->Body    = "Tento e-mail potvrzuje, že SMTP notifikace fungují správně.\n\nServer: " . SMTP_HOST . ':' . SMTP_PORT . "\nOdesílatel: " . SMTP_FROM;
+        $mail->Body    = "Tento e-mail potvrzuje, že notifikace fungují.\n\nMód: "
+            . ($useSendmail ? 'sendmail/mail()' : ($host . ':' . SMTP_PORT))
+            . "\nOdesílatel: " . SMTP_FROM;
         $mail->send();
         return 'ok';
     } catch (\Exception $e) {
         $err = $mail->ErrorInfo ?: $e->getMessage();
-        // Vrátíme chybu + relevantní řádky debug logu (filtrujeme jen server odpovědi)
         $lines = array_filter(explode("\n", $debugLog), function (string $l): bool {
             return $l !== '' && !str_contains($l, 'CLIENT ->') && !str_contains($l, 'Connection:');
         });
