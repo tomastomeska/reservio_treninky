@@ -345,11 +345,14 @@ document.querySelectorAll('[data-action-id]').forEach(btn => {
         if (actionType === 'signature') {
             openSignModal(actionId, label);
         } else {
-            const confirmed = await confirmAction(this.textContent.trim());
-            if (!confirmed) return;
+            const userConfirmed = await confirmAction(this.textContent.trim());
+            if (!userConfirmed) return;
             this.disabled = true;
             const ok = await sendAction(actionId, null);
-            if (ok) { location.reload(); }
+            if (ok) {
+                confirmed = true;
+                location.reload();
+            }
         }
     });
 });
@@ -431,6 +434,7 @@ document.getElementById('btnSubmitSign').addEventListener('click', async functio
     const ok = await sendAction(currentSignActionId, canvas.toDataURL('image/png'));
     if (ok) {
         bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
+        confirmed = true;
         location.reload();
     }
 });
