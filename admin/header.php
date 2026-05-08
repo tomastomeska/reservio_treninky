@@ -77,6 +77,10 @@ function renderAdminHeader(string $title = ''): void {
 				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'login_message.php' ? 'active' : '' ?>">
 					<i class="fas fa-bell me-2"></i>Hláška po přihlášení
 				</a>
+				<a href="<?= BASE_URL ?>/admin/email_notifications.php"
+				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'email_notifications.php' ? 'active' : '' ?>">
+					<i class="fas fa-envelope me-2"></i>E-mailové notifikace
+				</a>
 				<a href="<?= BASE_URL ?>/admin/settings.php"
 				   class="nav-link <?= basename($_SERVER['PHP_SELF']) === 'settings.php' ? 'active' : '' ?>">
 					<i class="fas fa-sliders me-2"></i>Nastavení

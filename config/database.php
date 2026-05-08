@@ -202,4 +202,17 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     if (!$stmtPaired->fetch()) {
         $pdo->exec('ALTER TABLE `training_sessions` ADD COLUMN `paired_session_id` INT NULL DEFAULT NULL');
     }
+
+    // Narozeninové notifikace – log odeslaných emailů (zabraňuje duplicitám)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `birthday_notifications` (
+            `id`                INT AUTO_INCREMENT PRIMARY KEY,
+            `athlete_id`        INT NOT NULL,
+            `notification_type` ENUM('warning','birthday') NOT NULL,
+            `year`              YEAR NOT NULL,
+            `sent_at`           DATETIME NOT NULL,
+            UNIQUE KEY `uq_athlete_year_type` (`athlete_id`, `year`, `notification_type`),
+            FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 }

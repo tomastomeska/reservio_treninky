@@ -890,3 +890,373 @@ HTML;
         return false;
     }
 }
+
+/**
+ * Odešle trenérovi email: sportovec bude mít za X dní narozeniny.
+ */
+function sendBirthdayWarningEmail(
+    string $toEmail,
+    string $coachName,
+    string $athleteFirst,
+    string $athleteLast,
+    string $birthDate,
+    int    $daysLeft
+): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        error_log('sendBirthdayWarningEmail: PHPMailer not found');
+        return false;
+    }
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $h         = function (?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); };
+    $fullName  = trim($athleteFirst . ' ' . $athleteLast);
+    $bdFormatted = '';
+    try { $bdFormatted = (new DateTime($birthDate))->format('d.m.'); } catch (\Exception $e) {}
+
+    $htmlBody = <<<HTML
+<!DOCTYPE html>
+<html lang="cs">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#7c3aed,#a78bfa);padding:36px 40px;text-align:center;">
+            <div style="font-size:40px;margin-bottom:8px;">&#x1F382;</div>
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Blíží se narozeniny!</h1>
+            <p style="margin:6px 0 0;color:#e9d5ff;font-size:13px;">TrainerApp – připomínka</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 16px;color:#374151;font-size:15px;">Dobrý den, <strong>{COACH_NAME}</strong>,</p>
+            <p style="margin:0 0 24px;color:#374151;font-size:15px;">
+              váš sportovec <strong>{ATHLETE_NAME}</strong> bude mít
+              za <strong style="color:#7c3aed;">{DAYS_LEFT} dní</strong> narozeniny
+              <strong>({BD_DATE})</strong>.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:4px;margin-bottom:28px;">
+              <tr>
+                <td style="padding:16px 20px;color:#4c1d95;font-size:14px;line-height:1.6;">
+                  &#127881; Možná je čas popřát mu/jí a naplánovat speciální trénink!
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;color:#6b7280;font-size:13px;">S pozdravem,<br><strong style="color:#374151;">TrainerApp – automatické notifikace</strong></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">Aplikaci vytvořil a spravuje <strong style="color:#6b7280;">Tomáš Tomeška</strong></p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
+
+    $htmlBody = str_replace(
+        ['{COACH_NAME}', '{ATHLETE_NAME}', '{DAYS_LEFT}', '{BD_DATE}'],
+        [$h($coachName), $h($fullName), (string)$daysLeft, $h($bdFormatted)],
+        $htmlBody
+    );
+
+    $altBody = "Dobrý den, {$coachName},\n\n"
+        . "váš sportovec {$fullName} bude mít za {$daysLeft} dní narozeniny ({$bdFormatted}).\n\n"
+        . "S pozdravem\nTrainerApp – automatické notifikace\n";
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        $mail->CharSet    = 'UTF-8';
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+        $mail->isHTML(true);
+        $mail->Subject = 'Blíží se narozeniny: ' . $fullName . ' (' . $bdFormatted . ')';
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $altBody;
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendBirthdayWarningEmail error: ' . $mail->ErrorInfo . ' | ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Odešle trenérovi email: dnes má sportovec narozeniny.
+ */
+function sendBirthdayTodayEmail(
+    string $toEmail,
+    string $coachName,
+    string $athleteFirst,
+    string $athleteLast,
+    int    $age
+): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        error_log('sendBirthdayTodayEmail: PHPMailer not found');
+        return false;
+    }
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $h        = function (?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); };
+    $fullName = trim($athleteFirst . ' ' . $athleteLast);
+
+    $htmlBody = <<<HTML
+<!DOCTYPE html>
+<html lang="cs">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#f59e0b,#fbbf24);padding:36px 40px;text-align:center;">
+            <div style="font-size:48px;margin-bottom:8px;">&#x1F389;</div>
+            <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">Dnes má narozeniny!</h1>
+            <p style="margin:6px 0 0;color:#fef3c7;font-size:13px;">TrainerApp – narozeninová gratulace</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;text-align:center;">
+            <p style="margin:0 0 8px;color:#374151;font-size:15px;">Dobrý den, <strong>{COACH_NAME}</strong>,</p>
+            <p style="margin:0 0 28px;color:#374151;font-size:15px;">dnes slaví narozeniny váš sportovec:</p>
+            <div style="background:linear-gradient(135deg,#7c3aed,#a78bfa);border-radius:12px;padding:28px 24px;margin-bottom:28px;display:inline-block;width:100%;box-sizing:border-box;">
+              <p style="margin:0 0 6px;color:#e9d5ff;font-size:14px;letter-spacing:.5px;">&#x1F3C6; Oslavenec/oslavenkyně</p>
+              <p style="margin:0 0 12px;color:#ffffff;font-size:26px;font-weight:700;">{ATHLETE_NAME}</p>
+              <p style="margin:0;color:#ddd6fe;font-size:18px;font-weight:600;">slaví <strong style="color:#fbbf24;font-size:28px;">{AGE}</strong> let</p>
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;margin-bottom:28px;">
+              <tr>
+                <td style="padding:14px 18px;color:#92400e;font-size:14px;text-align:left;">
+                  &#127881; Nezapomeňte mu/jí popřát a třeba zorganizovat narozeninový trénink!
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;color:#6b7280;font-size:13px;text-align:left;">S pozdravem,<br><strong style="color:#374151;">TrainerApp – automatické notifikace</strong></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 40px;text-align:center;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;">Aplikaci vytvořil a spravuje <strong style="color:#6b7280;">Tomáš Tomeška</strong></p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
+
+    $htmlBody = str_replace(
+        ['{COACH_NAME}', '{ATHLETE_NAME}', '{AGE}'],
+        [$h($coachName), $h($fullName), (string)$age],
+        $htmlBody
+    );
+
+    $altBody = "Dobrý den, {$coachName},\n\n"
+        . "dnes slaví narozeniny váš sportovec {$fullName} – je mu/jí {$age} let!\n\n"
+        . "Nezapomeňte mu/jí popřát.\n\n"
+        . "S pozdravem\nTrainerApp – automatické notifikace\n";
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        $mail->CharSet    = 'UTF-8';
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+        $mail->isHTML(true);
+        $mail->Subject = 'Narozeniny: ' . $fullName . ' slaví dnes ' . $age . ' let!';
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $altBody;
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendBirthdayTodayEmail error: ' . $mail->ErrorInfo . ' | ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Odešle testovací email přes SMTP. Vrátí true nebo chybovou zprávu.
+ */
+function sendTestEmail(string $toEmail): string {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+        return 'PHPMailer nebyl nalezen.';
+    }
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        $mail->CharSet    = 'UTF-8';
+        $mail->SMTPOptions = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+        $mail->isHTML(false);
+        $mail->Subject = 'Testovací e-mail z TrainerApp';
+        $mail->Body    = "Tento e-mail potvrzuje, že SMTP notifikace fungují správně.\n\nServer: " . SMTP_HOST . ':' . SMTP_PORT . "\nOdesílatel: " . SMTP_FROM;
+        $mail->send();
+        return 'ok';
+    } catch (\Exception $e) {
+        return $mail->ErrorInfo ?: $e->getMessage();
+    }
+}
+
+/**
+ * Vrátí nebo vygeneruje secret token pro cron URL.
+ */
+function getCronSecret(): string {
+    static $secret = null;
+    if ($secret !== null) {
+        return $secret;
+    }
+    $pdo = getDB();
+    $stmt = $pdo->prepare("SELECT `value` FROM app_settings WHERE `key` = 'cron_secret'");
+    $stmt->execute();
+    $row = $stmt->fetch();
+    if ($row && $row['value'] !== '') {
+        $secret = $row['value'];
+        return $secret;
+    }
+    $secret = bin2hex(random_bytes(24));
+    $pdo->prepare("INSERT INTO app_settings (`key`, `value`) VALUES ('cron_secret', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)")->execute([$secret]);
+    return $secret;
+}
+
+/**
+ * Zpracuje narozeninové notifikace:
+ * - Za 4 dny narozeniny  → email trenérovi (upozornění)
+ * - Dnes narozeniny       → email trenérovi (gratulace)
+ * Zabraňuje duplicitám přes tabulku birthday_notifications.
+ *
+ * @return array[]['type','athlete','coach_email','sent','age'?,'error'?]
+ */
+function processBirthdayNotifications(): array {
+    $pdo     = getDB();
+    $results = [];
+
+    // Sportovci s narozeninami za 4 dny – pouze pokud upozornění ještě nebylo odesláno letos
+    $warnRows = $pdo->query(
+        "SELECT a.id, a.first_name, a.last_name, a.birth_date,
+                c.email AS coach_email, c.name AS coach_name, c.username AS coach_username
+         FROM athletes a
+         JOIN coaches c ON c.id = a.coach_id
+         WHERE a.birth_date IS NOT NULL
+           AND DATE_FORMAT(a.birth_date, '%m-%d') = DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '%m-%d')
+           AND c.email IS NOT NULL AND c.email != ''
+           AND NOT EXISTS (
+               SELECT 1 FROM birthday_notifications bn
+               WHERE bn.athlete_id = a.id
+                 AND bn.notification_type = 'warning'
+                 AND bn.year = YEAR(CURDATE())
+           )"
+    )->fetchAll();
+
+    foreach ($warnRows as $a) {
+        $coachName = $a['coach_name'] ?: $a['coach_username'];
+        $sent = sendBirthdayWarningEmail(
+            $a['coach_email'], $coachName,
+            $a['first_name'], $a['last_name'],
+            $a['birth_date'], 4
+        );
+        if ($sent) {
+            try {
+                $pdo->prepare(
+                    "INSERT IGNORE INTO birthday_notifications (athlete_id, notification_type, year, sent_at)
+                     VALUES (?, 'warning', YEAR(CURDATE()), NOW())"
+                )->execute([(int)$a['id']]);
+            } catch (\Throwable $e) {
+                error_log('birthday_notifications insert error: ' . $e->getMessage());
+            }
+        }
+        $results[] = [
+            'type'        => 'warning',
+            'athlete'     => $a['first_name'] . ' ' . $a['last_name'],
+            'coach_email' => $a['coach_email'],
+            'sent'        => $sent,
+        ];
+    }
+
+    // Sportovci s narozeninami dnes – pouze pokud gratulace ještě nebyla odeslána letos
+    $todayRows = $pdo->query(
+        "SELECT a.id, a.first_name, a.last_name, a.birth_date,
+                c.email AS coach_email, c.name AS coach_name, c.username AS coach_username
+         FROM athletes a
+         JOIN coaches c ON c.id = a.coach_id
+         WHERE a.birth_date IS NOT NULL
+           AND DATE_FORMAT(a.birth_date, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d')
+           AND c.email IS NOT NULL AND c.email != ''
+           AND NOT EXISTS (
+               SELECT 1 FROM birthday_notifications bn
+               WHERE bn.athlete_id = a.id
+                 AND bn.notification_type = 'birthday'
+                 AND bn.year = YEAR(CURDATE())
+           )"
+    )->fetchAll();
+
+    foreach ($todayRows as $a) {
+        $coachName = $a['coach_name'] ?: $a['coach_username'];
+        $age = 0;
+        try {
+            $age = (int)(new DateTime())->diff(new DateTime($a['birth_date']))->y;
+        } catch (\Exception $e) {}
+
+        $sent = sendBirthdayTodayEmail(
+            $a['coach_email'], $coachName,
+            $a['first_name'], $a['last_name'],
+            $age
+        );
+        if ($sent) {
+            try {
+                $pdo->prepare(
+                    "INSERT IGNORE INTO birthday_notifications (athlete_id, notification_type, year, sent_at)
+                     VALUES (?, 'birthday', YEAR(CURDATE()), NOW())"
+                )->execute([(int)$a['id']]);
+            } catch (\Throwable $e) {
+                error_log('birthday_notifications insert error: ' . $e->getMessage());
+            }
+        }
+        $results[] = [
+            'type'        => 'birthday',
+            'athlete'     => $a['first_name'] . ' ' . $a['last_name'],
+            'coach_email' => $a['coach_email'],
+            'sent'        => $sent,
+            'age'         => $age,
+        ];
+    }
+
+    return $results;
+}
