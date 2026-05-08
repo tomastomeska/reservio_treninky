@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ============================================================
 // Pomocné funkce
 // ============================================================
@@ -694,6 +694,7 @@ HTML;
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
+        $mail->AuthType   = 'LOGIN';
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
@@ -863,6 +864,7 @@ HTML;
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
+        $mail->AuthType   = 'LOGIN';
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
@@ -978,6 +980,7 @@ HTML;
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
+        $mail->AuthType   = 'LOGIN';
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
@@ -1082,6 +1085,7 @@ HTML;
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
+        $mail->AuthType   = 'LOGIN';
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
@@ -1115,10 +1119,16 @@ function sendTestEmail(string $toEmail): string {
     require_once $phpmailerSrc . '/SMTP.php';
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    $debugLog = '';
     try {
         $mail->isSMTP();
+        $mail->SMTPDebug  = 3; // zachytí vše (client+server+connection)
+        $mail->Debugoutput = function (string $str, int $level) use (&$debugLog): void {
+            $debugLog .= trim($str) . "\n";
+        };
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
+        $mail->AuthType   = 'LOGIN'; // Wedos preferuje LOGIN
         $mail->Username   = SMTP_USER;
         $mail->Password   = SMTP_PASS;
         $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
@@ -1133,7 +1143,13 @@ function sendTestEmail(string $toEmail): string {
         $mail->send();
         return 'ok';
     } catch (\Exception $e) {
-        return $mail->ErrorInfo ?: $e->getMessage();
+        $err = $mail->ErrorInfo ?: $e->getMessage();
+        // Vrátíme chybu + relevantní řádky debug logu (filtrujeme jen server odpovědi)
+        $lines = array_filter(explode("\n", $debugLog), function (string $l): bool {
+            return $l !== '' && !str_contains($l, 'CLIENT ->') && !str_contains($l, 'Connection:');
+        });
+        $debugSummary = implode(' | ', array_slice(array_values($lines), -6));
+        return $err . ($debugSummary ? ' [DEBUG: ' . $debugSummary . ']' : '');
     }
 }
 
