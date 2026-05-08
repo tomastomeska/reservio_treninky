@@ -215,4 +215,29 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+
+    // Zprávy od admina trenérům
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `admin_messages` (
+            `id`              INT AUTO_INCREMENT PRIMARY KEY,
+            `subject`         VARCHAR(255) NOT NULL,
+            `body`            TEXT NOT NULL,
+            `attachment_path` VARCHAR(500) NULL,
+            `attachment_name` VARCHAR(255) NULL,
+            `sent_at`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Příjemci zpráv (trenéři) + stav přečtení
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `admin_message_recipients` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `message_id` INT NOT NULL,
+            `coach_id`   INT NOT NULL,
+            `read_at`    DATETIME NULL,
+            UNIQUE KEY `uq_msg_coach` (`message_id`, `coach_id`),
+            FOREIGN KEY (`message_id`) REFERENCES `admin_messages`(`id`) ON DELETE CASCADE,
+            FOREIGN KEY (`coach_id`)   REFERENCES `coaches`(`id`)        ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 }

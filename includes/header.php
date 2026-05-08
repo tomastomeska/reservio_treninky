@@ -50,6 +50,29 @@ function renderHeader(string $title = '', bool $withCharts = false): void {
             </ul>
             <?php if ($coach): ?>
             <div class="navbar-nav">
+                <?php
+                // Počet nepřečtených zpráv pro badge
+                try {
+                    $pdo = getDB();
+                    $unreadStmt = $pdo->prepare("
+                        SELECT COUNT(*) FROM admin_message_recipients
+                        WHERE coach_id = ? AND read_at IS NULL
+                    ");
+                    $unreadStmt->execute([$coach['id']]);
+                    $unreadMsgCount = (int)$unreadStmt->fetchColumn();
+                } catch (Throwable $e) {
+                    $unreadMsgCount = 0;
+                }
+                ?>
+                <a class="nav-link position-relative" href="<?= BASE_URL ?>/zpravy.php" title="Zprávy">
+                    <i class="fas fa-envelope me-1"></i>
+                    <?php if ($unreadMsgCount > 0): ?>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                          style="font-size:.65rem">
+                        <?= $unreadMsgCount ?>
+                    </span>
+                    <?php endif; ?>
+                </a>
                 <a class="nav-link text-secondary" href="<?= BASE_URL ?>/profile.php">
                     <i class="fas fa-user-tie me-1"></i><?= h($coach['name'] ?: $coach['username']) ?>
                 </a>
