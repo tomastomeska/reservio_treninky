@@ -120,6 +120,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete') {
+    if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
+        flash('danger', 'Neplatný bezpečnostní token.');
+        redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
+    }
+
+    $pdo->prepare('UPDATE training_sessions SET completed_at = NOW() WHERE id = ?')
+        ->execute([$sessionId]);
+
+    flash('success', 'Běh venku byl ukončen.');
+    redirect(BASE_URL . '/athlete_detail.php?id=' . $session['athlete_id']);
+}
+
 $runOutdoor = getRunOutdoorSessionByTrainingSession($sessionId);
 $splits = getRunOutdoorSplits((int)$runOutdoor['id']);
 $history = getRunOutdoorHistory((int)$session['athlete_id'], 5);
@@ -291,6 +304,17 @@ renderHeader('Běh venku - detail');
                         <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-secondary">Zpět na trénink</a>
                         <small id="run-outdoor-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
                     </div>
+                </form>
+
+                <hr>
+
+                <form method="post" class="mt-3">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="complete">
+                    <button type="submit" class="btn btn-primary fw-bold"
+                            onclick="return confirm('Chcete ukončit tento běh venku?')">
+                        <i class="fas fa-flag-checkered me-1"></i>Ukončit trénink
+                    </button>
                 </form>
             </div>
         </div>
