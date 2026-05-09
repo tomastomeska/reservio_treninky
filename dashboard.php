@@ -25,7 +25,7 @@ $stmt = $pdo->prepare(
                          WHERE ts3.athlete_id = a.id
                              AND ts3.completed_at IS NOT NULL
                              AND ts3.deleted_by_coach_at IS NULL
-             ORDER BY ts3.completed_at DESC LIMIT 1) AS last_set_name
+                         ORDER BY ts3.completed_at DESC LIMIT 1) AS last_set_name,
                         (SELECT ts4.id FROM training_sessions ts4
                                                  WHERE ts4.athlete_id = a.id
                                                      AND ts4.completed_at IS NULL
