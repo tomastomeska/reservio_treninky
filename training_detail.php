@@ -377,6 +377,8 @@ renderHeader('Detail tréninku');
                         <tr><th>Typ hry</th><td><?= h((string)($golfSession['game_type'] ?? '–')) ?></td></tr>
                         <tr><th>Jamky</th><td><?= h((string)($golfSession['num_holes'] ?? '–')) ?></td></tr>
                         <tr><th>Doba</th><td><?= !empty($golfSession['duration_minutes']) ? (int)$golfSession['duration_minutes'] . ' min' : '–' ?></td></tr>
+                        <tr><th>HCP před</th><td><?= $golfSession['handicap_before'] !== null ? number_format((float)$golfSession['handicap_before'], 1, ',', ' ') : '–' ?></td></tr>
+                        <tr><th>HCP po</th><td><?= $golfSession['handicap_after'] !== null ? number_format((float)$golfSession['handicap_after'], 1, ',', ' ') : '–' ?></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -385,7 +387,8 @@ renderHeader('Detail tréninku');
                     <tbody>
                         <tr><th style="width:40%">Km</th><td><?= isset($golfSession['distance_km']) ? number_format((float)$golfSession['distance_km'], 2, ',', ' ') . ' km' : '–' ?></td></tr>
                         <tr><th>Kalorie</th><td><?= h((string)($golfSession['calories_burned'] ?? '–')) ?></td></tr>
-                        <tr><th>HCP po hře</th><td><?= h((string)($golfSession['handicap_after'] ?? '–')) ?></td></tr>
+                        <tr><th>Do HCP</th><td><?= (int)($golfSession['count_for_handicap'] ?? 1) === 1 ? 'Ano' : 'Ne' ?></td></tr>
+                        <tr><th>Diferenciál</th><td><?= $golfSession['score_differential'] !== null ? number_format((float)$golfSession['score_differential'], 1, ',', ' ') : '–' ?></td></tr>
                         <tr><th>Pocit</th><td><?= h((string)($golfSession['feeling'] ?? '–')) ?></td></tr>
                     </tbody>
                 </table>

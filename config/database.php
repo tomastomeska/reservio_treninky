@@ -79,6 +79,32 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
     }
 
+    // Golf metadata pro HCP výpočet
+    $stmtGolfBefore = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'handicap_before'");
+    if (!$stmtGolfBefore->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN handicap_before DECIMAL(5,1) NULL AFTER players');
+    }
+    $stmtGolfCount = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'count_for_handicap'");
+    if (!$stmtGolfCount->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN count_for_handicap TINYINT(1) NOT NULL DEFAULT 1 AFTER handicap_before');
+    }
+    $stmtGolfCourseRating = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'course_rating'");
+    if (!$stmtGolfCourseRating->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN course_rating DECIMAL(4,1) NULL AFTER count_for_handicap');
+    }
+    $stmtGolfSlope = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'slope_rating'");
+    if (!$stmtGolfSlope->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN slope_rating SMALLINT NULL AFTER course_rating');
+    }
+    $stmtGolfScoreTotal = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'score_total'");
+    if (!$stmtGolfScoreTotal->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN score_total INT NULL AFTER slope_rating');
+    }
+    $stmtGolfDiff = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'score_differential'");
+    if (!$stmtGolfDiff->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN score_differential DECIMAL(5,1) NULL AFTER score_total');
+    }
+
     // Soft-delete tréninku trenérem (pro admin obnovu)
     $stmtTsDeleted = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_at'");
     if (!$stmtTsDeleted->fetch()) {
@@ -605,11 +631,201 @@ function updateGolfSession(
     return $stmt->rowCount() > 0;
 }
 
+function updateGolfHandicapFields(
+    int $golfSessionId,
+    ?float $handicapBefore,
+    bool $countForHandicap,
+    ?float $courseRating,
+    ?int $slopeRating,
+    ?int $scoreTotal,
+    ?float $scoreDifferential,
+    ?float $handicapAfter
+): bool {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'UPDATE `golf_sessions`
+         SET `handicap_before` = ?,
+             `count_for_handicap` = ?,
+             `course_rating` = ?,
+             `slope_rating` = ?,
+             `score_total` = ?,
+             `score_differential` = ?,
+             `handicap_after` = ?,
+             `updated_at` = NOW()
+         WHERE `id` = ?'
+    );
+
+    $stmt->execute([
+        $handicapBefore,
+        $countForHandicap ? 1 : 0,
+        $courseRating,
+        $slopeRating,
+        $scoreTotal,
+        $scoreDifferential,
+        $handicapAfter,
+        $golfSessionId,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
 function getGolfSessionByTrainingSession(int $sessionId): ?array {
     $pdo = getDB();
     $stmt = $pdo->prepare('SELECT * FROM `golf_sessions` WHERE `session_id` = ?');
     $stmt->execute([$sessionId]);
     return $stmt->fetch() ?: null;
+}
+
+function getLatestCountedGolfHandicap(int $athleteId, ?int $excludeSessionId = null): ?float {
+    $pdo = getDB();
+    $sql = '
+        SELECT gs.handicap_after
+        FROM `golf_sessions` gs
+        JOIN `training_sessions` ts ON ts.id = gs.session_id
+        WHERE ts.athlete_id = ?
+          AND ts.completed_at IS NOT NULL
+          AND COALESCE(gs.count_for_handicap, 1) = 1
+    ';
+    $params = [$athleteId];
+    if ($excludeSessionId !== null && $excludeSessionId > 0) {
+        $sql .= ' AND gs.session_id <> ?';
+        $params[] = $excludeSessionId;
+    }
+    $sql .= ' ORDER BY ts.completed_at DESC, gs.id DESC LIMIT 1';
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch();
+
+    return ($row && $row['handicap_after'] !== null) ? (float)$row['handicap_after'] : null;
+}
+
+function getGolfCountedDifferentials(int $athleteId, ?int $excludeSessionId = null, int $limit = 20): array {
+    $pdo = getDB();
+    $sql = '
+        SELECT gs.score_differential
+        FROM `golf_sessions` gs
+        JOIN `training_sessions` ts ON ts.id = gs.session_id
+        WHERE ts.athlete_id = ?
+          AND ts.completed_at IS NOT NULL
+          AND COALESCE(gs.count_for_handicap, 1) = 1
+          AND gs.score_differential IS NOT NULL
+    ';
+    $params = [$athleteId];
+    if ($excludeSessionId !== null && $excludeSessionId > 0) {
+        $sql .= ' AND gs.session_id <> ?';
+        $params[] = $excludeSessionId;
+    }
+    $sql .= ' ORDER BY ts.completed_at DESC, gs.id DESC LIMIT ?';
+    $params[] = $limit;
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    $result = [];
+    foreach ($stmt->fetchAll() as $row) {
+        if ($row['score_differential'] !== null) {
+            $result[] = (float)$row['score_differential'];
+        }
+    }
+
+    return $result;
+}
+
+function calculateGolfScoreTotal(array $holes): int {
+    $total = 0;
+    foreach ($holes as $hole) {
+        $total += (int)($hole['score'] ?? 0);
+    }
+    return $total;
+}
+
+function calculateGolfScoreDifferential(?int $grossScore, ?float $courseRating, ?int $slopeRating): ?float {
+    if ($grossScore === null || $courseRating === null || $slopeRating === null || $slopeRating <= 0) {
+        return null;
+    }
+
+    return round((($grossScore - $courseRating) * 113) / $slopeRating, 1);
+}
+
+function calculateGolfHandicapIndexFromDifferentials(array $differentials, ?float $startingHandicap = null): ?float {
+    if (empty($differentials)) {
+        return $startingHandicap !== null ? round($startingHandicap, 1) : null;
+    }
+
+    sort($differentials, SORT_NUMERIC);
+    $count = count($differentials);
+
+    if ($count < 3) {
+        $baseline = $startingHandicap !== null ? $startingHandicap : $differentials[0];
+        $currentAvg = array_sum($differentials) / $count;
+        return round(($baseline + $currentAvg) / 2, 1);
+    }
+
+    $useCount = 1;
+    $adjustment = 0.0;
+
+    if ($count === 3) {
+        $useCount = 1;
+        $adjustment = -2.0;
+    } elseif ($count === 4) {
+        $useCount = 1;
+        $adjustment = -1.0;
+    } elseif ($count === 5) {
+        $useCount = 1;
+        $adjustment = 0.0;
+    } elseif ($count === 6) {
+        $useCount = 2;
+        $adjustment = -1.0;
+    } elseif ($count <= 8) {
+        $useCount = 2;
+        $adjustment = 0.0;
+    } elseif ($count <= 11) {
+        $useCount = 3;
+    } elseif ($count <= 14) {
+        $useCount = 4;
+    } elseif ($count <= 16) {
+        $useCount = 5;
+    } elseif ($count <= 18) {
+        $useCount = 6;
+    } elseif ($count === 19) {
+        $useCount = 7;
+    } else {
+        $useCount = 8;
+    }
+
+    $selected = array_slice($differentials, 0, $useCount);
+    return round((array_sum($selected) / $useCount) + $adjustment, 1);
+}
+
+function calculateGolfHandicapProjection(
+    int $athleteId,
+    int $sessionId,
+    ?float $startingHandicap,
+    ?float $courseRating,
+    ?int $slopeRating,
+    int $grossScore,
+    bool $countForHandicap
+): array {
+    $differential = calculateGolfScoreDifferential($grossScore, $courseRating, $slopeRating);
+    $previousHandicap = getLatestCountedGolfHandicap($athleteId, $sessionId);
+    if ($previousHandicap === null) {
+        $previousHandicap = $startingHandicap;
+    }
+
+    $differentials = getGolfCountedDifferentials($athleteId, $sessionId);
+    if ($differential !== null) {
+        array_unshift($differentials, $differential);
+    }
+
+    $handicapAfter = calculateGolfHandicapIndexFromDifferentials($differentials, $previousHandicap);
+
+    return [
+        'handicap_before'     => $previousHandicap !== null ? round($previousHandicap, 1) : null,
+        'score_total'         => $grossScore,
+        'score_differential'  => $differential,
+        'handicap_after'      => $handicapAfter,
+    ];
 }
 
 function saveGolfHoles(int $golfSessionId, array $holes): void {
@@ -650,7 +866,7 @@ function getGolfHoles(int $golfSessionId): array {
 function getGolfHistory(int $athleteId, int $limit = 10): array {
     $pdo = getDB();
     $stmt = $pdo->prepare(
-        'SELECT gs.*, ts.completed_at, ts.started_at AS ts_started_at,
+    'SELECT gs.*, ts.completed_at, ts.started_at AS ts_started_at,
                 COALESCE(SUM(gh.score), 0) AS total_score,
                 COALESCE(SUM(gh.par), 0) AS total_par
          FROM `golf_sessions` gs
@@ -680,7 +896,8 @@ function calculateGolfStats(int $athleteId, int $daysBack = 90): array {
          LEFT JOIN `golf_holes` gh ON gh.golf_session_id = gs.id
          WHERE ts.athlete_id = ?
            AND ts.completed_at IS NOT NULL
-           AND ts.completed_at >= DATE_SUB(NOW(), INTERVAL ? DAY)'
+                     AND ts.completed_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+                     AND COALESCE(gs.count_for_handicap, 1) = 1'
     );
     $stmt->execute([$athleteId, $daysBack]);
     $row = $stmt->fetch();

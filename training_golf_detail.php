@@ -35,6 +35,26 @@ if (!$golfSession) {
     $golfSession = getGolfSessionByTrainingSession($sessionId);
 }
 
+$defaultStartingHandicap = getLatestCountedGolfHandicap((int)$session['athlete_id']);
+$handicapBefore = $golfSession['handicap_before'] !== null
+    ? (float)$golfSession['handicap_before']
+    : $defaultStartingHandicap;
+$countForHandicap = (int)($golfSession['count_for_handicap'] ?? 1) === 1;
+$courseRating = $golfSession['course_rating'] !== null ? (float)$golfSession['course_rating'] : 72.0;
+$slopeRating = $golfSession['slope_rating'] !== null ? (int)$golfSession['slope_rating'] : 113;
+
+$savedHoles = getGolfHoles((int)$golfSession['id']);
+$savedScoreTotal = calculateGolfScoreTotal($savedHoles);
+$savedProjection = calculateGolfHandicapProjection(
+    (int)$session['athlete_id'],
+    $sessionId,
+    $handicapBefore,
+    $courseRating,
+    $slopeRating,
+    $savedScoreTotal,
+    $countForHandicap
+);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
     if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
         flash('danger', 'Neplatný bezpečnostní token.');
@@ -48,9 +68,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     $caloriesBurned = $_POST['calories_burned'] !== '' ? (int)$_POST['calories_burned'] : null;
     $weather = trim($_POST['weather'] ?? '');
     $players = trim($_POST['players'] ?? '');
-    $handicapAfter = $_POST['handicap_after'] !== '' ? (float)$_POST['handicap_after'] : null;
+    $handicapBefore = $_POST['handicap_before'] !== '' ? (float)$_POST['handicap_before'] : null;
+    $countForHandicap = isset($_POST['count_for_handicap']);
+    $courseRating = $_POST['course_rating'] !== '' ? (float)$_POST['course_rating'] : 72.0;
+    $slopeRating = $_POST['slope_rating'] !== '' ? (int)$_POST['slope_rating'] : 113;
     $durationMinutes = $_POST['duration_minutes'] !== '' ? (int)$_POST['duration_minutes'] : null;
     $feeling = trim($_POST['feeling'] ?? '');
+
+    if ($handicapBefore === null && $defaultStartingHandicap === null) {
+        flash('danger', 'První golf vyžaduje zadat startovní HCP.');
+        redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
+    }
 
     $allowedGameTypes = ['training', 'tournament', 'friendly'];
     if (!in_array($gameType, $allowedGameTypes, true)) {
@@ -77,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $caloriesBurned,
         $weather !== '' ? $weather : null,
         $players !== '' ? $players : null,
-        $handicapAfter,
+        null,
         $feeling !== '' ? $feeling : null,
         $durationMinutes
     );
@@ -107,6 +135,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'notes' => $notes !== '' ? $notes : null,
         ];
     }
+
+    $scoreTotal = calculateGolfScoreTotal($holes);
+    $projection = calculateGolfHandicapProjection(
+        (int)$session['athlete_id'],
+        $sessionId,
+        $handicapBefore,
+        $courseRating,
+        $slopeRating,
+        $scoreTotal,
+        $countForHandicap
+    );
+
+    updateGolfHandicapFields(
+        (int)$golfSession['id'],
+        $projection['handicap_before'],
+        $countForHandicap,
+        $courseRating,
+        $slopeRating,
+        $projection['score_total'],
+        $projection['score_differential'],
+        $projection['handicap_after']
+    );
 
     saveGolfHoles((int)$golfSession['id'], $holes);
 
@@ -176,6 +226,48 @@ renderHeader('Golf - detail');
                     </div>
 
                     <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Startovní HCP</label>
+                                <input type="number" class="form-control" step="0.1" min="0" name="handicap_before"
+                                       value="<?= h((string)($handicapBefore ?? '')) ?>"
+                                        placeholder="<?= $defaultStartingHandicap !== null ? h(number_format((float)$defaultStartingHandicap, 1, '.', '')) : 'např. 18.4' ?>"
+                                        <?= $defaultStartingHandicap === null ? 'required' : '' ?>>
+                                <?php if ($defaultStartingHandicap === null): ?>
+                                <small class="text-muted">První golf: zadej vstupní HCP.</small>
+                                <?php else: ?>
+                                <small class="text-muted">Další kolo navazuje na poslední uložené HCP.</small>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Course rating</label>
+                                <input type="number" class="form-control" step="0.1" min="0" name="course_rating"
+                                       value="<?= h((string)$courseRating) ?>"
+                                       placeholder="např. 72.0">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Slope rating</label>
+                                <input type="number" class="form-control" min="1" name="slope_rating"
+                                       value="<?= h((string)$slopeRating) ?>"
+                                       placeholder="např. 113">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3 d-flex flex-column justify-content-end h-100">
+                                <label class="form-label fw-semibold">Do HCP</label>
+                                <div class="form-check form-switch mt-1">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="count_for_handicap" name="count_for_handicap" <?= $countForHandicap ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="count_for_handicap">Započítat toto kolo</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
                         <div class="col-md-2">
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Km</label>
@@ -199,9 +291,10 @@ renderHeader('Golf - detail');
                         </div>
                         <div class="col-md-2">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">HCP po hře</label>
-                                <input type="number" class="form-control" step="0.1" name="handicap_after"
-                                       value="<?= h((string)($golfSession['handicap_after'] ?? '')) ?>">
+                                <label class="form-label fw-semibold">Výsledné HCP</label>
+                                <input type="number" class="form-control" step="0.1" readonly id="golf-handicap-after"
+                                       value="<?= h((string)($golfSession['handicap_after'] ?? $savedProjection['handicap_after'] ?? '')) ?>">
+                                <small class="text-muted">Po uložení se dopočítá automaticky.</small>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -261,6 +354,32 @@ renderHeader('Golf - detail');
                         <small id="golf-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-4">
+                        <div class="alert alert-light border mb-0">
+                            <div class="small text-muted">HCP před hrou</div>
+                            <div class="fw-bold fs-5" id="golf-hcp-before-value"><?= $savedProjection['handicap_before'] !== null ? number_format((float)$savedProjection['handicap_before'], 1, ',', ' ') : '–' ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert alert-light border mb-0">
+                            <div class="small text-muted">Score differential</div>
+                            <div class="fw-bold fs-5" id="golf-score-diff-value"><?= $savedProjection['score_differential'] !== null ? number_format((float)$savedProjection['score_differential'], 1, ',', ' ') : '–' ?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert alert-light border mb-0">
+                            <div class="small text-muted">Výsledné HCP</div>
+                            <div class="fw-bold fs-5" id="golf-hcp-after-value">
+                                <?= $savedProjection['handicap_after'] !== null ? number_format((float)$savedProjection['handicap_after'], 1, ',', ' ') : '–' ?>
+                                <span class="badge bg-secondary ms-1" id="golf-hcp-count-badge">
+                                    <?= $countForHandicap ? 'počítá se' : 'jen informativně' ?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -279,6 +398,9 @@ renderHeader('Golf - detail');
                             <th>Hřiště</th>
                             <th>Skóre</th>
                             <th>Par</th>
+                            <th>HCP před</th>
+                            <th>HCP po</th>
+                            <th>Do HCP</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -288,6 +410,15 @@ renderHeader('Golf - detail');
                             <td><?= h((string)$round['course_name']) ?></td>
                             <td><?= (int)$round['total_score'] ?></td>
                             <td><?= (int)$round['total_par'] ?></td>
+                            <td><?= $round['handicap_before'] !== null ? number_format((float)$round['handicap_before'], 1, ',', ' ') : '–' ?></td>
+                            <td><?= $round['handicap_after'] !== null ? number_format((float)$round['handicap_after'], 1, ',', ' ') : '–' ?></td>
+                            <td>
+                                <?php if ((int)($round['count_for_handicap'] ?? 1) === 1): ?>
+                                <span class="badge bg-success">Ano</span>
+                                <?php else: ?>
+                                <span class="badge bg-secondary">Ne</span>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -355,11 +486,14 @@ function collectGolfPayload() {
         course_name: (golfForm.querySelector('[name="course_name"]')?.value || '').trim(),
         num_holes: parseInt(golfForm.querySelector('[name="num_holes"]')?.value || '18', 10) || 18,
         game_type: golfForm.querySelector('[name="game_type"]')?.value || 'training',
+        handicap_before: golfForm.querySelector('[name="handicap_before"]')?.value ?? '',
+        count_for_handicap: golfForm.querySelector('[name="count_for_handicap"]')?.checked ? 1 : 0,
+        course_rating: golfForm.querySelector('[name="course_rating"]')?.value ?? '',
+        slope_rating: golfForm.querySelector('[name="slope_rating"]')?.value ?? '',
         distance_km: golfForm.querySelector('[name="distance_km"]')?.value ?? '',
         calories_burned: golfForm.querySelector('[name="calories_burned"]')?.value ?? '',
         weather: (golfForm.querySelector('[name="weather"]')?.value || '').trim(),
         players: (golfForm.querySelector('[name="players"]')?.value || '').trim(),
-        handicap_after: golfForm.querySelector('[name="handicap_after"]')?.value ?? '',
         duration_minutes: golfForm.querySelector('[name="duration_minutes"]')?.value ?? '',
         feeling: (golfForm.querySelector('[name="feeling"]')?.value || '').trim(),
         holes: []
@@ -414,6 +548,28 @@ async function saveGolfDraft(immediate = false) {
         }
         lastSavedHash = hash;
         setStatus('Uloženo ' + (data.saved_at || ''), 'text-success');
+        const handicapAfterInput = document.getElementById('golf-handicap-after');
+        const handicapBeforeValue = document.getElementById('golf-hcp-before-value');
+        const scoreDiffValue = document.getElementById('golf-score-diff-value');
+        const handicapAfterValue = document.getElementById('golf-hcp-after-value');
+        const countBadge = document.getElementById('golf-hcp-count-badge');
+        if (handicapBeforeValue && data.handicap_before !== undefined) {
+            handicapBeforeValue.textContent = data.handicap_before !== null ? Number(data.handicap_before).toFixed(1).replace('.', ',') : '–';
+        }
+        if (scoreDiffValue && data.score_differential !== undefined) {
+            scoreDiffValue.textContent = data.score_differential !== null ? Number(data.score_differential).toFixed(1).replace('.', ',') : '–';
+        }
+        if (handicapAfterInput && data.handicap_after !== undefined) {
+            handicapAfterInput.value = data.handicap_after !== null ? Number(data.handicap_after).toFixed(1) : '';
+        }
+        if (handicapAfterValue && data.handicap_after !== undefined) {
+            if (handicapAfterValue.firstChild && handicapAfterValue.firstChild.nodeType === Node.TEXT_NODE) {
+                handicapAfterValue.firstChild.nodeValue = data.handicap_after !== null ? Number(data.handicap_after).toFixed(1).replace('.', ',') + ' ' : '– ';
+            }
+            if (countBadge) {
+                countBadge.textContent = data.count_for_handicap ? 'počítá se' : 'jen informativně';
+            }
+        }
     } catch (err) {
         setStatus('Neuloženo - zkontrolujte připojení', 'text-danger');
     } finally {
