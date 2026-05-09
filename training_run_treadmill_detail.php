@@ -103,7 +103,7 @@ renderHeader('Běh na páse – Detail');
                 </div>
 
                 <?php if ($runTreadmill): ?>
-                <form method="post" novalidate>
+                <form method="post" novalidate id="treadmill-form">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="save">
 
@@ -153,13 +153,14 @@ renderHeader('Běh na páse – Detail');
                                   placeholder="Jak se cítil během běhu?..."><?= h($runTreadmill['feeling'] ?? '') ?></textarea>
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
                         <button type="submit" class="btn btn-primary fw-bold">
                             <i class="fas fa-save me-1"></i>Uložit
                         </button>
                         <a href="<?= BASE_URL ?>/athlete_detail.php?id=<?= $session['athlete_id'] ?>" class="btn btn-secondary">
                             Zpět
                         </a>
+                        <small id="treadmill-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
 
@@ -278,5 +279,39 @@ renderHeader('Běh na páse – Detail');
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('treadmill-form');
+    const statusEl = document.getElementById('treadmill-autosave-status');
+    if (!form || !window.createSportAutosave) {
+        return;
+    }
+
+    const autosave = window.createSportAutosave({
+        form: form,
+        statusEl: statusEl,
+        endpoint: '<?= BASE_URL ?>/api/save_run_treadmill_draft.php',
+        debounceMs: 700,
+        buildPayload: function() {
+            return {
+                session_id: <?= (int)$sessionId ?>,
+                duration_minutes: form.querySelector('[name="duration_minutes"]').value || '0',
+                duration_seconds: form.querySelector('[name="duration_seconds"]').value || '0',
+                distance_km: form.querySelector('[name="distance_km"]').value || '',
+                calories_burned: form.querySelector('[name="calories_burned"]').value || '',
+                location: form.querySelector('[name="location"]').value || '',
+                feeling: form.querySelector('[name="feeling"]').value || ''
+            };
+        }
+    });
+
+    form.addEventListener('submit', function() {
+        if (autosave && typeof autosave.saveNow === 'function') {
+            autosave.saveNow();
+        }
+    });
+});
+</script>
 
 <?php renderFooter(); ?>

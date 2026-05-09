@@ -140,7 +140,7 @@ renderHeader('Běh venku - detail');
                     <small class="text-muted">Sada: <?= h($session['set_name']) ?></small>
                 </div>
 
-                <form method="post" novalidate>
+                <form method="post" novalidate id="run-outdoor-form">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="save">
 
@@ -284,11 +284,12 @@ renderHeader('Běh venku - detail');
                         </table>
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
                         <button type="submit" class="btn btn-success fw-bold">
                             <i class="fas fa-save me-1"></i>Uložit běh venku
                         </button>
                         <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-secondary">Zpět na trénink</a>
+                        <small id="run-outdoor-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
             </div>
@@ -365,6 +366,10 @@ function addSplitRow() {
         '<td><input type="number" step="0.1" min="0" name="split_max_speed[]" class="form-control form-control-sm"></td>' +
         '<td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
+
+    if (window.__runOutdoorAutosave && typeof window.__runOutdoorAutosave.scheduleSave === 'function') {
+        window.__runOutdoorAutosave.scheduleSave();
+    }
 }
 
 function removeSplitRow(btn) {
@@ -372,8 +377,66 @@ function removeSplitRow(btn) {
     const tbody = document.querySelector('#splits-table tbody');
     if (tbody.querySelectorAll('tr').length > 1) {
         row.remove();
+        if (window.__runOutdoorAutosave && typeof window.__runOutdoorAutosave.scheduleSave === 'function') {
+            window.__runOutdoorAutosave.scheduleSave();
+        }
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('run-outdoor-form');
+    const statusEl = document.getElementById('run-outdoor-autosave-status');
+    if (!form || !window.createSportAutosave) {
+        return;
+    }
+
+    const autosave = window.createSportAutosave({
+        form: form,
+        statusEl: statusEl,
+        endpoint: '<?= BASE_URL ?>/api/save_run_outdoor_draft.php',
+        debounceMs: 700,
+        buildPayload: function() {
+            const splitKm = form.querySelectorAll('[name="split_km[]"]');
+            const splitTime = form.querySelectorAll('[name="split_time[]"]');
+            const splitPace = form.querySelectorAll('[name="split_pace[]"]');
+            const splitMaxSpeed = form.querySelectorAll('[name="split_max_speed[]"]');
+            const splits = [];
+
+            for (let i = 0; i < splitKm.length; i++) {
+                splits.push({
+                    km_marker: splitKm[i]?.value || '',
+                    split_time: splitTime[i]?.value || '',
+                    pace: splitPace[i]?.value || '',
+                    max_speed_at_km: splitMaxSpeed[i]?.value || ''
+                });
+            }
+
+            return {
+                session_id: <?= (int)$sessionId ?>,
+                duration_minutes: form.querySelector('[name="duration_minutes"]').value || '0',
+                duration_seconds: form.querySelector('[name="duration_seconds"]').value || '0',
+                distance_km: form.querySelector('[name="distance_km"]').value || '',
+                run_type: form.querySelector('[name="run_type"]').value || 'free',
+                surface: form.querySelector('[name="surface"]').value || 'asphalt',
+                max_speed: form.querySelector('[name="max_speed"]').value || '',
+                calories_burned: form.querySelector('[name="calories_burned"]').value || '',
+                step_count: form.querySelector('[name="step_count"]').value || '',
+                rpe: form.querySelector('[name="rpe"]').value || '',
+                tempo_variability: form.querySelector('[name="tempo_variability"]').value || '',
+                feeling: form.querySelector('[name="feeling"]').value || '',
+                splits: splits
+            };
+        }
+    });
+
+    window.__runOutdoorAutosave = autosave;
+
+    form.addEventListener('submit', function() {
+        if (autosave && typeof autosave.saveNow === 'function') {
+            autosave.saveNow();
+        }
+    });
+});
 </script>
 
 <?php renderFooter(); ?>
