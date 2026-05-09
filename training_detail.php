@@ -29,6 +29,12 @@ if (!$session) {
 // Načtení cviků v session snapshotu (fallback pro starší data)
 $exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
 
+$sportTypes = array_values(array_unique(array_filter(array_map(
+    fn($ex) => $ex['sport_type'] ?? 'standard',
+    $exercises
+))));
+$primarySportType = $sportTypes[0] ?? 'standard';
+
 // Načtení sérií
 $seriesByExercise = [];
 $totalSeries      = 0;
@@ -39,6 +45,30 @@ foreach ($exercises as $ex) {
 }
 
 $athleteName = h($session['first_name'] . ' ' . $session['last_name']);
+
+$runOutdoor = null;
+$runOutdoorSplits = [];
+$runTreadmill = null;
+$golfSession = null;
+$golfHoles = [];
+
+if ($primarySportType === 'run_outdoor') {
+    $runOutdoor = getRunOutdoorSessionByTrainingSession($sessionId);
+    if ($runOutdoor) {
+        $runOutdoorSplits = getRunOutdoorSplits((int)$runOutdoor['id']);
+    }
+}
+
+if ($primarySportType === 'run_treadmill') {
+    $runTreadmill = getRunTreadmillSessionByTrainingSession($sessionId);
+}
+
+if ($primarySportType === 'golf') {
+    $golfSession = getGolfSessionByTrainingSession($sessionId);
+    if ($golfSession) {
+        $golfHoles = getGolfHoles((int)$golfSession['id']);
+    }
+}
 
 renderHeader('Detail tréninku');
 ?>
@@ -98,6 +128,114 @@ renderHeader('Detail tréninku');
 </div>
 
 <!-- Souhrn -->
+<?php if ($primarySportType === 'run_outdoor' && $runOutdoor): ?>
+<?php
+    $durationSeconds = (int)($runOutdoor['duration_seconds'] ?? 0);
+    $distanceKm = (float)($runOutdoor['distance_km'] ?? 0);
+    $paceSeconds = ($durationSeconds > 0 && $distanceKm > 0) ? (int)round($durationSeconds / $distanceKm) : 0;
+?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= number_format($distanceKm, 2, ',', ' ') ?></div>
+            <div class="text-muted">Km</div>
+        </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= gmdate('i:s', $durationSeconds) ?></div>
+            <div class="text-muted">Čas</div>
+        </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= $paceSeconds > 0 ? gmdate('i:s', $paceSeconds) : '–' ?></div>
+            <div class="text-muted">Tempo / km</div>
+        </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= h((string)($runOutdoor['max_speed'] ?? '–')) ?></div>
+            <div class="text-muted">Max rychlost</div>
+        </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= h((string)($runOutdoor['calories_burned'] ?? '–')) ?></div>
+            <div class="text-muted">Kalorie</div>
+        </div>
+    </div>
+    <div class="col-sm-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= count($runOutdoorSplits) ?></div>
+            <div class="text-muted">Splitů</div>
+        </div>
+    </div>
+</div>
+<?php elseif ($primarySportType === 'run_treadmill' && $runTreadmill): ?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= number_format((float)$runTreadmill['distance_km'], 2, ',', ' ') ?></div>
+            <div class="text-muted">Km</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= gmdate('H:i:s', (int)$runTreadmill['duration_seconds']) ?></div>
+            <div class="text-muted">Čas</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= h((string)($runTreadmill['calories_burned'] ?? '–')) ?></div>
+            <div class="text-muted">Kalorie</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= h((string)($runTreadmill['location'] ?? '–')) ?></div>
+            <div class="text-muted">Místo</div>
+        </div>
+    </div>
+</div>
+<?php elseif ($primarySportType === 'golf' && $golfSession): ?>
+<?php
+    $totalPar = 0;
+    $totalScore = 0;
+    foreach ($golfHoles as $hole) {
+        $totalPar += (int)$hole['par'];
+        $totalScore += (int)($hole['score'] ?? 0);
+    }
+    $holeDiff = $totalScore > 0 ? $totalScore - $totalPar : 0;
+?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= count($golfHoles) ?></div>
+            <div class="text-muted">Jamek</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= $totalPar ?></div>
+            <div class="text-muted">Par celkem</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= $totalScore ?></div>
+            <div class="text-muted">Skóre celkem</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="display-6 fw-bold text-warning"><?= $holeDiff >= 0 ? '+' . $holeDiff : (string)$holeDiff ?></div>
+            <div class="text-muted">Proti paru</div>
+        </div>
+    </div>
+</div>
+<?php else: ?>
 <div class="row g-3 mb-4">
     <div class="col-sm-4">
         <div class="card border-0 shadow-sm text-center py-3">
@@ -126,8 +264,170 @@ renderHeader('Detail tréninku');
         </div>
     </div>
 </div>
+<?php endif; ?>
 
-<!-- Cviky a série -->
+<!-- Cviky a série / speciální sporty -->
+<?php if ($primarySportType === 'run_outdoor' && $runOutdoor): ?>
+<div class="card border-0 shadow-sm mb-4 exercise-block">
+    <div class="card-header bg-dark text-white d-flex align-items-center">
+        <span class="badge bg-warning text-dark me-2 fs-5">1</span>
+        <span class="fw-bold fs-5">Běh venku</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><th style="width:40%">Doba</th><td><?= gmdate('H:i:s', (int)$runOutdoor['duration_seconds']) ?></td></tr>
+                        <tr><th>Vzdálenost</th><td><?= number_format((float)$runOutdoor['distance_km'], 2, ',', ' ') ?> km</td></tr>
+                        <tr><th>Tempo</th><td><?= !empty($runOutdoor['avg_pace']) ? h($runOutdoor['avg_pace']) . ' /km' : '–' ?></td></tr>
+                        <tr><th>Max rychlost</th><td><?= h((string)($runOutdoor['max_speed'] ?? '–')) ?> km/h</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><th style="width:40%">Typ běhu</th><td><?= h((string)($runOutdoor['run_type'] ?? '–')) ?></td></tr>
+                        <tr><th>Povrch</th><td><?= h((string)($runOutdoor['surface'] ?? '–')) ?></td></tr>
+                        <tr><th>Kalorie</th><td><?= h((string)($runOutdoor['calories_burned'] ?? '–')) ?></td></tr>
+                        <tr><th>Kroky</th><td><?= h((string)($runOutdoor['step_count'] ?? '–')) ?></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <?php if (!empty($runOutdoor['feeling'])): ?>
+        <div class="mb-3">
+            <div class="fw-semibold mb-1">Pocit</div>
+            <div class="text-muted"><?= h($runOutdoor['feeling']) ?></div>
+        </div>
+        <?php endif; ?>
+
+        <h6 class="fw-bold mb-2">Splity</h6>
+        <?php if (empty($runOutdoorSplits)): ?>
+        <div class="text-center py-3 text-muted">Žádné splity.</div>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered mb-0 align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>Km</th>
+                        <th>Čas</th>
+                        <th>Tempo</th>
+                        <th>Max rychlost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($runOutdoorSplits as $split): ?>
+                    <tr>
+                        <td class="fw-bold"><?= number_format((float)$split['km_marker'], 2, ',', ' ') ?></td>
+                        <td><?= h((string)$split['split_time']) ?></td>
+                        <td><?= h((string)($split['pace'] ?? '–')) ?></td>
+                        <td><?= h((string)($split['max_speed_at_km'] ?? '–')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php elseif ($primarySportType === 'run_treadmill' && $runTreadmill): ?>
+<div class="card border-0 shadow-sm mb-4 exercise-block">
+    <div class="card-header bg-dark text-white d-flex align-items-center">
+        <span class="badge bg-warning text-dark me-2 fs-5">1</span>
+        <span class="fw-bold fs-5">Běh na páse</span>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <tbody>
+                <tr><th style="width:35%">Doba</th><td><?= gmdate('H:i:s', (int)$runTreadmill['duration_seconds']) ?></td></tr>
+                <tr><th>Vzdálenost</th><td><?= number_format((float)$runTreadmill['distance_km'], 2, ',', ' ') ?> km</td></tr>
+                <tr><th>Tempo</th><td><?= ((float)$runTreadmill['distance_km'] > 0) ? gmdate('i:s', (int)round(((int)$runTreadmill['duration_seconds']) / (float)$runTreadmill['distance_km'])) . ' /km' : '–' ?></td></tr>
+                <tr><th>Kalorie</th><td><?= h((string)($runTreadmill['calories_burned'] ?? '–')) ?></td></tr>
+                <tr><th>Místo</th><td><?= h((string)($runTreadmill['location'] ?? '–')) ?></td></tr>
+                <?php if (!empty($runTreadmill['feeling'])): ?>
+                <tr><th>Pocit</th><td><?= h((string)$runTreadmill['feeling']) ?></td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php elseif ($primarySportType === 'golf' && $golfSession): ?>
+<?php
+    $totalPar = 0;
+    $totalScore = 0;
+    foreach ($golfHoles as $hole) {
+        $totalPar += (int)$hole['par'];
+        $totalScore += (int)($hole['score'] ?? 0);
+    }
+?>
+<div class="card border-0 shadow-sm mb-4 exercise-block">
+    <div class="card-header bg-dark text-white d-flex align-items-center">
+        <span class="badge bg-warning text-dark me-2 fs-5">1</span>
+        <span class="fw-bold fs-5">Golf</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><th style="width:40%">Hřiště</th><td><?= h((string)($golfSession['course_name'] ?? '–')) ?></td></tr>
+                        <tr><th>Typ hry</th><td><?= h((string)($golfSession['game_type'] ?? '–')) ?></td></tr>
+                        <tr><th>Jamky</th><td><?= h((string)($golfSession['num_holes'] ?? '–')) ?></td></tr>
+                        <tr><th>Doba</th><td><?= !empty($golfSession['duration_minutes']) ? (int)$golfSession['duration_minutes'] . ' min' : '–' ?></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><th style="width:40%">Km</th><td><?= isset($golfSession['distance_km']) ? number_format((float)$golfSession['distance_km'], 2, ',', ' ') . ' km' : '–' ?></td></tr>
+                        <tr><th>Kalorie</th><td><?= h((string)($golfSession['calories_burned'] ?? '–')) ?></td></tr>
+                        <tr><th>HCP po hře</th><td><?= h((string)($golfSession['handicap_after'] ?? '–')) ?></td></tr>
+                        <tr><th>Pocit</th><td><?= h((string)($golfSession['feeling'] ?? '–')) ?></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-4"><div class="alert alert-light border mb-0">Par celkem: <strong><?= $totalPar ?></strong></div></div>
+            <div class="col-md-4"><div class="alert alert-light border mb-0">Skóre celkem: <strong><?= $totalScore ?></strong></div></div>
+            <div class="col-md-4"><div class="alert alert-light border mb-0">Proti paru: <strong><?= $totalScore > 0 ? (($totalScore - $totalPar) >= 0 ? '+' : '') . ($totalScore - $totalPar) : '–' ?></strong></div></div>
+        </div>
+
+        <h6 class="fw-bold mb-2">Jamky</h6>
+        <?php if (empty($golfHoles)): ?>
+        <div class="text-center py-3 text-muted">Žádné jamky.</div>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered mb-0 align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>Jamka</th>
+                        <th>Par</th>
+                        <th>Skóre</th>
+                        <th>Poznámka</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($golfHoles as $hole): ?>
+                    <tr>
+                        <td class="fw-bold"><?= (int)$hole['hole_number'] ?></td>
+                        <td><?= (int)$hole['par'] ?></td>
+                        <td><?= h((string)($hole['score'] ?? '–')) ?></td>
+                        <td class="text-start"><?= h((string)($hole['notes'] ?? '')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php else: ?>
 <?php foreach ($exercises as $ex): ?>
 <?php $series = $seriesByExercise[$ex['exercise_id']] ?? []; ?>
 <div class="card border-0 shadow-sm mb-4 exercise-block" id="ex-<?= $ex['exercise_id'] ?>">
@@ -191,6 +491,7 @@ renderHeader('Detail tréninku');
     </div>
 </div>
 <?php endforeach; ?>
+<?php endif; ?>
 
 <?php if ($session['notes']): ?>
 <div class="card border-0 shadow-sm mb-4">
