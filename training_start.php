@@ -24,12 +24,14 @@ if (!$stmt->fetch()) {
 }
 
 // Ověření sady
-$stmt = $pdo->prepare('SELECT id FROM workout_sets WHERE id = ? AND coach_id = ?');
+$stmt = $pdo->prepare('SELECT id, sport_type FROM workout_sets WHERE id = ? AND coach_id = ?');
 $stmt->execute([$workoutSetId, $coachId]);
-if (!$stmt->fetch()) {
+$workoutSet = $stmt->fetch();
+if (!$workoutSet) {
     flash('danger', 'Sada nenalezena.');
     redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
 }
+$sportType = $workoutSet['sport_type'] ?? 'standard';
 
 // Zkontroluj, zda neexistuje nedokončená session pro tohoto sportovce
 $stmt = $pdo->prepare(
@@ -67,4 +69,19 @@ $snapshotStmt = $pdo->prepare(
 );
 $snapshotStmt->execute([$sessionId, $workoutSetId]);
 
-redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
+// Detekuj typ sportu a přesměruj na příslušný formulář
+switch ($sportType) {
+    case 'run_treadmill':
+        redirect(BASE_URL . '/training_run_treadmill_start.php?id=' . $sessionId);
+        break;
+    case 'run_outdoor':
+        redirect(BASE_URL . '/training_run_outdoor_start.php?id=' . $sessionId);
+        break;
+    case 'golf':
+        redirect(BASE_URL . '/training_golf_start.php?id=' . $sessionId);
+        break;
+    case 'standard':
+    default:
+        redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
+        break;
+}
