@@ -32,19 +32,6 @@ if (!$workoutSet) {
     redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
 }
 
-// Určení sport_type z prvního cviku v sadě
-$stmt = $pdo->prepare(
-    'SELECT e.sport_type
-     FROM workout_set_exercises wse
-     JOIN exercises e ON e.id = wse.exercise_id
-     WHERE wse.workout_set_id = ?
-     ORDER BY wse.exercise_order ASC
-     LIMIT 1'
-);
-$stmt->execute([$workoutSetId]);
-$firstExercise = $stmt->fetch();
-$sportType = $firstExercise['sport_type'] ?? 'standard';
-
 // Zkontroluj, zda neexistuje nedokončená session pro tohoto sportovce
 $stmt = $pdo->prepare(
     'SELECT id, paired_session_id FROM training_sessions
@@ -72,8 +59,8 @@ $sessionId = (int)$pdo->lastInsertId();
 
 // Ulož snapshot cviků v době startu tréninku.
 $snapshotStmt = $pdo->prepare(
-    'INSERT INTO training_session_exercises (session_id, exercise_id, exercise_order, exercise_name)
-     SELECT ?, wse.exercise_id, wse.exercise_order, e.name
+    'INSERT INTO training_session_exercises (session_id, exercise_id, exercise_order, exercise_name, sport_type)
+     SELECT ?, wse.exercise_id, wse.exercise_order, e.name, e.sport_type
      FROM workout_set_exercises wse
      JOIN exercises e ON e.id = wse.exercise_id
      WHERE wse.workout_set_id = ?
@@ -81,19 +68,4 @@ $snapshotStmt = $pdo->prepare(
 );
 $snapshotStmt->execute([$sessionId, $workoutSetId]);
 
-// Detekuj typ sportu a přesměruj na příslušný formulář
-switch ($sportType) {
-    case 'run_treadmill':
-        redirect(BASE_URL . '/training_run_treadmill_start.php?id=' . $sessionId);
-        break;
-    case 'run_outdoor':
-        redirect(BASE_URL . '/training_run_outdoor_start.php?id=' . $sessionId);
-        break;
-    case 'golf':
-        redirect(BASE_URL . '/training_golf_start.php?id=' . $sessionId);
-        break;
-    case 'standard':
-    default:
-        redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
-        break;
-}
+redirect(BASE_URL . '/training_session.php?id=' . $sessionId);

@@ -74,16 +74,59 @@ renderHeader('Aktivní trénink');
 <!-- Cviky -->
 <?php foreach ($exercises as $idx => $ex): ?>
 <?php $series = $seriesByExercise[$ex['exercise_id']] ?? []; ?>
+<?php $sportType = $ex['sport_type'] ?? 'standard'; ?>
 <div class="card border-0 shadow-sm mb-4" id="exercise-card-<?= $ex['exercise_id'] ?>">
     <div class="card-header d-flex align-items-center bg-dark text-white">
         <span class="badge bg-warning text-dark me-2 fs-5"><?= $ex['exercise_order'] ?></span>
         <span class="fw-bold fs-5"><?= h($ex['exercise_name']) ?></span>
+        <?php if ($sportType !== 'standard'): ?>
+        <span class="badge bg-info ms-2">
+            <?php
+            $typeLabels = [
+                'golf' => '⛳ Golf',
+                'run_outdoor' => '🏃 Běh venku',
+                'run_treadmill' => '🏃‍♂️ Běh na páse',
+            ];
+            echo $typeLabels[$sportType] ?? 'Speciální';
+            ?>
+        </span>
+        <?php endif; ?>
         <?php $lastCompleted = $lastCompletedByExercise[$ex['exercise_id']] ?? null; ?>
         <span class="ms-auto badge bg-secondary" id="series-count-<?= $ex['exercise_id'] ?>">
             <?= count($series) ?> séri<?= count($series) === 1 ? 'e' : 'í' ?>
         </span>
     </div>
     <div class="card-body p-0">
+        <?php if ($sportType === 'golf'): ?>
+        <!-- Golfový formulář -->
+        <div class="p-3">
+            <div class="alert alert-info">
+                <i class="fas fa-golf-ball me-2"></i>
+                Golf - zatím v přípravě. Prosím, zaznamenej výsledek ručně v poznámkách.
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Poznámky</label>
+                <textarea class="form-control" rows="3" placeholder="Zaznamenání skóre, jamek, atd."></textarea>
+            </div>
+        </div>
+        <?php elseif ($sportType === 'run_treadmill'): ?>
+        <!-- Běh na páse formulář -->
+        <div class="p-3">
+            <div class="alert alert-info">
+                <i class="fas fa-person-running me-2"></i>
+                Běh na páse - prosím, přepni se do <a href="<?= BASE_URL ?>/training_run_treadmill_detail.php?id=<?= $sessionId ?>" class="alert-link">detailu běhu</a> pro zadání metriky.
+            </div>
+        </div>
+        <?php elseif ($sportType === 'run_outdoor'): ?>
+        <!-- Běh venku formulář -->
+        <div class="p-3">
+            <div class="alert alert-warning">
+                <i class="fas fa-person-hiking me-2"></i>
+                Běh venku - zatím v přípravě.
+            </div>
+        </div>
+        <?php else: ?>
+        <!-- Standardní formulář (váha, opakování, dopomoc) -->
         <div class="table-responsive">
             <table class="table table-bordered mb-0 align-middle text-center" id="series-table-<?= $ex['exercise_id'] ?>">
                 <thead class="table-light">
@@ -120,6 +163,7 @@ renderHeader('Aktivní trénink');
                 </tbody>
             </table>
         </div>
+        <?php endif; ?>
 
         <div class="p-3 border-top bg-light">
             <?php if ($lastCompleted): ?>

@@ -123,7 +123,7 @@ function getSessionExercises(int $sessionId, int $setId): array {
     $pdo = getDB();
 
     $snapshot = $pdo->prepare(
-        'SELECT tse.exercise_id, tse.exercise_order, tse.exercise_name
+        'SELECT tse.exercise_id, tse.exercise_order, tse.exercise_name, tse.sport_type
          FROM training_session_exercises tse
          WHERE tse.session_id = ?
          ORDER BY tse.exercise_order ASC'
@@ -144,6 +144,7 @@ function getSessionExercises(int $sessionId, int $setId): array {
             'exercise_id'    => $eid,
             'exercise_order' => $ord,
             'exercise_name'  => $row['exercise_name'],
+            'sport_type'     => $row['sport_type'] ?? 'standard',
         ];
         if ($ord > $maxOrder) {
             $maxOrder = $ord;
@@ -152,7 +153,7 @@ function getSessionExercises(int $sessionId, int $setId): array {
 
     // Starší data bez snapshotu: doplň cviky, které už nejsou v sadě, ale mají série.
     $fromSeries = $pdo->prepare(
-        'SELECT DISTINCT ss.exercise_id, e.name AS exercise_name
+        'SELECT DISTINCT ss.exercise_id, e.name AS exercise_name, e.sport_type
          FROM session_series ss
          JOIN exercises e ON e.id = ss.exercise_id
          WHERE ss.session_id = ?
@@ -167,6 +168,7 @@ function getSessionExercises(int $sessionId, int $setId): array {
                 'exercise_id'    => $eid,
                 'exercise_order' => $maxOrder,
                 'exercise_name'  => $row['exercise_name'],
+                'sport_type'     => $row['sport_type'] ?? 'standard',
             ];
         }
     }
