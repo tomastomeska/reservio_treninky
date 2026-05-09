@@ -19,7 +19,7 @@ if (!$athlete) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
-// Načtení cviků pro výběr filtru
+// Načtení standardních cviků (data ze sérií)
 $stmtEx = $pdo->prepare(
     'SELECT DISTINCT e.id, e.name
      FROM exercises e
@@ -33,15 +33,79 @@ $stmtEx = $pdo->prepare(
 $stmtEx->execute([$athleteId]);
 $exercises = $stmtEx->fetchAll();
 
-// Vybraný cvik pro graf
-$selectedExId = intParam($_GET, 'exercise_id');
-if (!$selectedExId && !empty($exercises)) {
-    $selectedExId = $exercises[0]['id'];
+// Dostupnost speciálních sportů
+$stmtHasOutdoor = $pdo->prepare(
+    'SELECT COUNT(*)
+     FROM run_outdoor_sessions ros
+     JOIN training_sessions ts ON ts.id = ros.session_id
+     WHERE ts.athlete_id = ?
+       AND ts.completed_at IS NOT NULL
+       AND ts.deleted_by_coach_at IS NULL'
+);
+$stmtHasOutdoor->execute([$athleteId]);
+$hasRunOutdoor = (int)$stmtHasOutdoor->fetchColumn() > 0;
+
+$stmtHasGolf = $pdo->prepare(
+    'SELECT COUNT(*)
+     FROM golf_sessions gs
+     JOIN training_sessions ts ON ts.id = gs.session_id
+     WHERE ts.athlete_id = ?
+       AND ts.completed_at IS NOT NULL
+       AND ts.deleted_by_coach_at IS NULL'
+);
+$stmtHasGolf->execute([$athleteId]);
+$hasGolf = (int)$stmtHasGolf->fetchColumn() > 0;
+
+// Výběr metriky (standardní cvik nebo speciální sport)
+$metricOptions = [];
+foreach ($exercises as $ex) {
+    $metricOptions[] = [
+        'key'   => 'ex:' . (int)$ex['id'],
+        'label' => $ex['name'],
+        'kind'  => 'standard',
+    ];
+}
+if ($hasRunOutdoor) {
+    $metricOptions[] = [
+        'key'   => 'sport:run_outdoor',
+        'label' => 'Běh venku (speciální sport)',
+        'kind'  => 'run_outdoor',
+    ];
+}
+if ($hasGolf) {
+    $metricOptions[] = [
+        'key'   => 'sport:golf',
+        'label' => 'Golf (speciální sport)',
+        'kind'  => 'golf',
+    ];
 }
 
-// Data pro graf (max váha a průměrný objem na session)
+$selectedMetricKey = trim((string)($_GET['metric'] ?? ''));
+$legacyExerciseId = intParam($_GET, 'exercise_id');
+if ($selectedMetricKey === '' && $legacyExerciseId > 0) {
+    $selectedMetricKey = 'ex:' . $legacyExerciseId;
+}
+if ($selectedMetricKey === '' && !empty($metricOptions)) {
+    $selectedMetricKey = $metricOptions[0]['key'];
+}
+
+$selectedKind = 'standard';
+$selectedLabel = '';
+$selectedExId = 0;
+foreach ($metricOptions as $opt) {
+    if ($opt['key'] === $selectedMetricKey) {
+        $selectedKind = $opt['kind'];
+        $selectedLabel = $opt['label'];
+        if ($selectedKind === 'standard') {
+            $selectedExId = (int)substr($opt['key'], 3);
+        }
+        break;
+    }
+}
+
+// Data pro graf podle vybrané metriky
 $chartData = [];
-if ($selectedExId) {
+if ($selectedKind === 'standard' && $selectedExId > 0) {
     $stmtData = $pdo->prepare(
         'SELECT ts.completed_at AS session_date,
                 ws.name AS set_name,
@@ -53,25 +117,58 @@ if ($selectedExId) {
          FROM session_series ss
          JOIN training_sessions ts ON ss.session_id = ts.id
          JOIN workout_sets ws ON ts.workout_set_id = ws.id
-                 WHERE ts.athlete_id = ?
-                     AND ss.exercise_id = ?
-                     AND ts.completed_at IS NOT NULL
-                     AND ts.deleted_by_coach_at IS NULL
+         WHERE ts.athlete_id = ?
+           AND ss.exercise_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.deleted_by_coach_at IS NULL
          GROUP BY ts.id
          ORDER BY ts.completed_at ASC'
     );
     $stmtData->execute([$athleteId, $selectedExId]);
     $chartData = $stmtData->fetchAll();
+} elseif ($selectedKind === 'run_outdoor') {
+    $stmtData = $pdo->prepare(
+        'SELECT ts.completed_at AS session_date,
+                ws.name AS set_name,
+                ros.distance_km,
+                ros.duration_seconds,
+                ros.calories_burned,
+                CASE WHEN ros.distance_km > 0 THEN ros.duration_seconds / ros.distance_km ELSE NULL END AS pace_seconds
+         FROM run_outdoor_sessions ros
+         JOIN training_sessions ts ON ts.id = ros.session_id
+         JOIN workout_sets ws ON ws.id = ts.workout_set_id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.deleted_by_coach_at IS NULL
+         ORDER BY ts.completed_at ASC'
+    );
+    $stmtData->execute([$athleteId]);
+    $chartData = $stmtData->fetchAll();
+} elseif ($selectedKind === 'golf') {
+    $stmtData = $pdo->prepare(
+        'SELECT ts.completed_at AS session_date,
+                ws.name AS set_name,
+                gs.course_name,
+                gs.num_holes,
+                COALESCE(SUM(gh.score), 0) AS total_score,
+                COALESCE(SUM(gh.par), 0) AS total_par,
+                COALESCE(SUM(gh.score), 0) - COALESCE(SUM(gh.par), 0) AS score_to_par,
+                gs.duration_minutes
+         FROM golf_sessions gs
+         JOIN training_sessions ts ON ts.id = gs.session_id
+         JOIN workout_sets ws ON ws.id = ts.workout_set_id
+         LEFT JOIN golf_holes gh ON gh.golf_session_id = gs.id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.deleted_by_coach_at IS NULL
+         GROUP BY ts.id, ts.completed_at, ws.name, gs.course_name, gs.num_holes, gs.duration_minutes
+         ORDER BY ts.completed_at ASC'
+    );
+    $stmtData->execute([$athleteId]);
+    $chartData = $stmtData->fetchAll();
 }
 
-// Název vybraného cviku
-$selectedExName = '';
-foreach ($exercises as $ex) {
-    if ($ex['id'] == $selectedExId) {
-        $selectedExName = $ex['name'];
-        break;
-    }
-}
+$selectedExName = $selectedLabel;
 
 renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name']), true);
 ?>
@@ -85,14 +182,14 @@ renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name
         <i class="fas fa-chart-line me-2 text-warning"></i>
         <?= h($athlete['first_name'] . ' ' . $athlete['last_name']) ?> – Pokrok
     </h2>
-    <?php if (!empty($chartData)): ?>
+    <?php if (!empty($chartData) && $selectedKind === 'standard'): ?>
     <button onclick="window.print()" class="btn btn-outline-secondary btn-sm ms-auto">
         <i class="fas fa-print me-1"></i>Tisk / PDF
     </button>
     <?php endif; ?>
 </div>
 
-<?php if (empty($exercises)): ?>
+<?php if (empty($metricOptions)): ?>
 <div class="card border-0 shadow-sm">
     <div class="card-body text-center py-5 text-muted">
         <i class="fas fa-chart-bar fa-3x mb-3 d-block"></i>
@@ -107,11 +204,11 @@ renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name
         <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
             <input type="hidden" name="athlete_id" value="<?= $athleteId ?>">
             <div>
-                <label class="form-label fw-semibold mb-1">Vyberte cvik</label>
-                <select name="exercise_id" class="form-select" onchange="this.form.submit()">
-                    <?php foreach ($exercises as $ex): ?>
-                    <option value="<?= $ex['id'] ?>" <?= $ex['id'] == $selectedExId ? 'selected' : '' ?>>
-                        <?= h($ex['name']) ?>
+                <label class="form-label fw-semibold mb-1">Vyberte metriku</label>
+                <select name="metric" class="form-select" onchange="this.form.submit()">
+                    <?php foreach ($metricOptions as $opt): ?>
+                    <option value="<?= h($opt['key']) ?>" <?= $opt['key'] === $selectedMetricKey ? 'selected' : '' ?>>
+                        <?= h($opt['label']) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
@@ -121,6 +218,8 @@ renderHeader('Grafy – ' . h($athlete['first_name'] . ' ' . $athlete['last_name
 </div>
 
 <?php if (!empty($chartData)): ?>
+
+<?php if ($selectedKind === 'standard'): ?>
 
 <!-- Statistika -->
 <?php
@@ -376,8 +475,132 @@ $svgVolume = buildPrintSvg($chartData, 'total_volume', '', '#3b82f6');
     </div>
 </div>
 
+<?php elseif ($selectedKind === 'run_outdoor'): ?>
+<?php
+$totalKm = array_sum(array_map(fn($r) => (float)$r['distance_km'], $chartData));
+$totalSeconds = array_sum(array_map(fn($r) => (int)$r['duration_seconds'], $chartData));
+$avgPaceSec = $totalKm > 0 ? (int)round($totalSeconds / $totalKm) : 0;
+$paceValues = array_values(array_filter(array_map(fn($r) => (float)$r['pace_seconds'], $chartData), fn($v) => $v > 0));
+$bestPaceSec = !empty($paceValues) ? (int)min($paceValues) : 0;
+?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-warning"><?= count($chartData) ?></div><div class="text-muted">Běhů venku</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-warning"><?= number_format($totalKm, 1, ',', ' ') ?> km</div><div class="text-muted">Celkem km</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-success"><?= $avgPaceSec > 0 ? sprintf('%02d:%02d', intdiv($avgPaceSec, 60), $avgPaceSec % 60) : '–' ?></div><div class="text-muted">Prům. tempo</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-info"><?= $bestPaceSec > 0 ? sprintf('%02d:%02d', intdiv($bestPaceSec, 60), $bestPaceSec % 60) : '–' ?></div><div class="text-muted">Nejlepší tempo</div></div></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white"><i class="fas fa-chart-line me-2 text-warning"></i>Běh venku - vzdálenost</div>
+    <div class="card-body"><canvas id="runDistanceChart" style="max-height:320px"></canvas></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white"><i class="fas fa-gauge-high me-2 text-warning"></i>Běh venku - tempo (s/km)</div>
+    <div class="card-body"><canvas id="runPaceChart" style="max-height:320px"></canvas></div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white"><i class="fas fa-table me-2"></i>Detailní data</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered mb-0 align-middle text-center">
+                <thead class="table-light"><tr><th>#</th><th>Datum</th><th>Sada</th><th>Vzdálenost</th><th>Čas</th><th>Tempo</th></tr></thead>
+                <tbody>
+                <?php foreach (array_reverse($chartData) as $i => $row): ?>
+                    <?php $paceSec = (float)$row['pace_seconds']; ?>
+                    <tr>
+                        <td class="text-muted"><?= count($chartData) - $i ?></td>
+                        <td><?= formatDate($row['session_date']) ?></td>
+                        <td><span class="badge bg-secondary"><?= h($row['set_name']) ?></span></td>
+                        <td class="fw-bold"><?= number_format((float)$row['distance_km'], 2, ',', ' ') ?> km</td>
+                        <td><?= gmdate('H:i:s', (int)$row['duration_seconds']) ?></td>
+                        <td><?= $paceSec > 0 ? sprintf('%02d:%02d', intdiv((int)$paceSec, 60), ((int)$paceSec % 60)) : '–' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const runLabels = <?= json_encode(array_map(fn($r) => formatDateJS($r['session_date']), $chartData)) ?>;
+const runDistance = <?= json_encode(array_map(fn($r) => (float)$r['distance_km'], $chartData)) ?>;
+const runPaceSec = <?= json_encode(array_map(fn($r) => $r['pace_seconds'] !== null ? (float)$r['pace_seconds'] : null, $chartData)) ?>;
+
+new Chart(document.getElementById('runDistanceChart'), {
+    type: 'line',
+    data: { labels: runLabels, datasets: [{ label: 'Km', data: runDistance, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 3, tension: 0.25, fill: true }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+
+new Chart(document.getElementById('runPaceChart'), {
+    type: 'line',
+    data: { labels: runLabels, datasets: [{ label: 'Tempo (s/km)', data: runPaceSec, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)', borderWidth: 3, tension: 0.25, fill: true }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
+});
+</script>
+
+<?php elseif ($selectedKind === 'golf'): ?>
+<?php
+$totalRounds = count($chartData);
+$toParValues = array_map(fn($r) => (int)$r['score_to_par'], $chartData);
+$bestToPar = !empty($toParValues) ? min($toParValues) : 0;
+$avgToPar = !empty($toParValues) ? round(array_sum($toParValues) / count($toParValues), 1) : 0;
+$totalScore = array_sum(array_map(fn($r) => (int)$r['total_score'], $chartData));
+?>
+<div class="row g-3 mb-4">
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-warning"><?= $totalRounds ?></div><div class="text-muted">Golf kol</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-success"><?= ($bestToPar > 0 ? '+' : '') . $bestToPar ?></div><div class="text-muted">Nejlepší výsledek vůči paru</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-info"><?= ($avgToPar > 0 ? '+' : '') . $avgToPar ?></div><div class="text-muted">Průměr vůči paru</div></div></div>
+    <div class="col-sm-3"><div class="card border-0 shadow-sm text-center py-3"><div class="display-6 fw-bold text-warning"><?= $totalScore ?></div><div class="text-muted">Celkové skóre</div></div></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-dark text-white"><i class="fas fa-chart-line me-2 text-warning"></i>Golf - výsledek vůči paru</div>
+    <div class="card-body"><canvas id="golfToParChart" style="max-height:320px"></canvas></div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white"><i class="fas fa-table me-2"></i>Detailní data</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered mb-0 align-middle text-center">
+                <thead class="table-light"><tr><th>#</th><th>Datum</th><th>Sada</th><th>Hřiště</th><th>Skóre</th><th>Par</th><th>Výsledek</th></tr></thead>
+                <tbody>
+                <?php foreach (array_reverse($chartData) as $i => $row): ?>
+                    <tr>
+                        <td class="text-muted"><?= count($chartData) - $i ?></td>
+                        <td><?= formatDate($row['session_date']) ?></td>
+                        <td><span class="badge bg-secondary"><?= h($row['set_name']) ?></span></td>
+                        <td><?= h((string)$row['course_name']) ?></td>
+                        <td class="fw-bold"><?= (int)$row['total_score'] ?></td>
+                        <td><?= (int)$row['total_par'] ?></td>
+                        <td class="fw-bold <?= (int)$row['score_to_par'] <= 0 ? 'text-success' : 'text-danger' ?>"><?= ((int)$row['score_to_par'] > 0 ? '+' : '') . (int)$row['score_to_par'] ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const golfLabels = <?= json_encode(array_map(fn($r) => formatDateJS($r['session_date']), $chartData)) ?>;
+const golfToPar = <?= json_encode(array_map(fn($r) => (int)$r['score_to_par'], $chartData)) ?>;
+
+new Chart(document.getElementById('golfToParChart'), {
+    type: 'bar',
+    data: { labels: golfLabels, datasets: [{ label: 'Výsledek vůči paru', data: golfToPar, backgroundColor: golfToPar.map(v => v <= 0 ? 'rgba(22,163,74,0.75)' : 'rgba(220,38,38,0.75)'), borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
+});
+</script>
+
+<?php endif; ?>
+
 <?php else: ?>
-<div class="alert alert-info">Pro tento cvik zatím nejsou žádná data.</div>
+<div class="alert alert-info">Pro vybranou metriku zatím nejsou žádná dokončená data.</div>
 <?php endif; ?>
 <?php endif; ?>
 
