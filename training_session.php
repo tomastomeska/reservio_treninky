@@ -102,11 +102,7 @@ renderHeader('Aktivní trénink');
         <div class="p-3">
             <div class="alert alert-info">
                 <i class="fas fa-golf-ball me-2"></i>
-                Golf - zatím v přípravě. Prosím, zaznamenej výsledek ručně v poznámkách.
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Poznámky</label>
-                <textarea class="form-control" rows="3" placeholder="Zaznamenání skóre, jamek, atd."></textarea>
+                Golf - otevřete <a href="<?= BASE_URL ?>/training_golf_detail.php?id=<?= $sessionId ?>" class="alert-link">detail golfu</a> pro jamky, par a skóre.
             </div>
         </div>
         <?php elseif ($sportType === 'run_treadmill'): ?>
@@ -114,15 +110,15 @@ renderHeader('Aktivní trénink');
         <div class="p-3">
             <div class="alert alert-info">
                 <i class="fas fa-person-running me-2"></i>
-                Běh na páse - prosím, přepni se do <a href="<?= BASE_URL ?>/training_run_treadmill_detail.php?id=<?= $sessionId ?>" class="alert-link">detailu běhu</a> pro zadání metriky.
+                Běh na páse - otevřete <a href="<?= BASE_URL ?>/training_run_treadmill_start.php?id=<?= $sessionId ?>" class="alert-link">detail běhu</a> pro metriky.
             </div>
         </div>
         <?php elseif ($sportType === 'run_outdoor'): ?>
         <!-- Běh venku formulář -->
         <div class="p-3">
-            <div class="alert alert-warning">
+            <div class="alert alert-info">
                 <i class="fas fa-person-hiking me-2"></i>
-                Běh venku - zatím v přípravě.
+                Běh venku - otevřete <a href="<?= BASE_URL ?>/training_run_outdoor_detail.php?id=<?= $sessionId ?>" class="alert-link">detail běhu venku</a> pro splity a metriky.
             </div>
         </div>
         <?php else: ?>
@@ -203,6 +199,7 @@ renderHeader('Aktivní trénink');
                 </div>
             </div>
             <?php endif; ?>
+            <?php if ($sportType === 'standard'): ?>
             <!-- Formulář pro přidání série (inline) -->
             <div class="add-series-row" id="add-series-form-<?= $ex['exercise_id'] ?>">
                 <div>
@@ -234,6 +231,7 @@ renderHeader('Aktivní trénink');
                     </button>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>

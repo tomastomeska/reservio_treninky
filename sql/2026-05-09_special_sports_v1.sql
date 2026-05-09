@@ -9,6 +9,9 @@ ALTER TABLE `exercises` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_ou
 -- 2. Přidat sloupec sport_type do training_sessions (odvozeno z prvního cviku v sadě)
 ALTER TABLE `training_sessions` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_outdoor', 'run_treadmill') NOT NULL DEFAULT 'standard' AFTER `paired_session_id`;
 
+-- 3. Přidat sport_type i do snapshotu cviků v session
+ALTER TABLE `training_session_exercises` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_outdoor', 'run_treadmill') NOT NULL DEFAULT 'standard' AFTER `exercise_name`;
+
 -- ============================================================
 -- Golf tabulky
 -- ============================================================
@@ -110,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `run_treadmill_sessions` (
 
 -- ============================================================
 -- Trigger: automaticky naplnit sport_type v training_sessions
--- (při vložení session, přepíšeme sport_type ze workout_setu)
+-- (při vložení session vezmeme sport_type z prvního cviku v sadě)
 -- ============================================================
 
 DELIMITER //
@@ -120,9 +123,11 @@ BEFORE INSERT ON `training_sessions`
 FOR EACH ROW
 BEGIN
     DECLARE v_sport_type VARCHAR(50);
-    SELECT `sport_type` INTO v_sport_type
-    FROM `workout_sets`
-    WHERE `id` = NEW.`workout_set_id`
+    SELECT e.`sport_type` INTO v_sport_type
+    FROM `workout_set_exercises` wse
+    JOIN `exercises` e ON e.`id` = wse.`exercise_id`
+    WHERE wse.`workout_set_id` = NEW.`workout_set_id`
+    ORDER BY wse.`exercise_order` ASC
     LIMIT 1;
     
     IF v_sport_type IS NOT NULL THEN

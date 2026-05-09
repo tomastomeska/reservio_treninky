@@ -108,7 +108,7 @@ function getSeriesForExercise(int $sessionId, int $exerciseId): array {
 function getWorkoutSetExercises(int $setId): array {
     $pdo  = getDB();
     $stmt = $pdo->prepare(
-        'SELECT wse.*, e.name AS exercise_name
+    'SELECT wse.*, e.name AS exercise_name, e.sport_type
          FROM workout_set_exercises wse
          JOIN exercises e ON wse.exercise_id = e.id
          WHERE wse.workout_set_id = ?

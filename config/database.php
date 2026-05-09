@@ -384,3 +384,313 @@ function calculateRunTreadmillStats(int $athleteId, int $daysBack = 30): array {
             : 0,
     ];
 }
+
+// ============================================================
+// Speciální sporty – Běh venku
+// ============================================================
+
+function createRunOutdoorSession(int $sessionId): int {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'INSERT INTO `run_outdoor_sessions`
+            (`session_id`, `duration_seconds`, `distance_km`, `run_type`, `surface`, `started_at`, `created_at`)
+         VALUES (?, 0, 0, "free", "asphalt", NOW(), NOW())
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)'
+    );
+    $stmt->execute([$sessionId]);
+    return (int)$pdo->lastInsertId();
+}
+
+function updateRunOutdoorSession(
+    int $runSessionId,
+    int $durationSeconds,
+    float $distanceKm,
+    string $runType,
+    string $surface,
+    ?float $maxSpeed = null,
+    ?int $caloriesBurned = null,
+    ?int $stepCount = null,
+    ?int $rpe = null,
+    ?float $tempoVariability = null,
+    ?string $feeling = null
+): bool {
+    $avgPace = null;
+    if ($durationSeconds > 0 && $distanceKm > 0) {
+        $paceSeconds = (int)round($durationSeconds / $distanceKm);
+        $avgPace = sprintf('%02d:%02d', intdiv($paceSeconds, 60), $paceSeconds % 60);
+    }
+
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'UPDATE `run_outdoor_sessions`
+         SET `duration_seconds` = ?,
+             `distance_km` = ?,
+             `run_type` = ?,
+             `surface` = ?,
+             `avg_pace` = ?,
+             `max_speed` = ?,
+             `calories_burned` = ?,
+             `step_count` = ?,
+             `rpe` = ?,
+             `tempo_variability` = ?,
+             `feeling` = ?,
+             `ended_at` = NOW(),
+             `updated_at` = NOW()
+         WHERE `id` = ?'
+    );
+
+    $stmt->execute([
+        max(0, $durationSeconds),
+        max(0, $distanceKm),
+        $runType,
+        $surface,
+        $avgPace,
+        $maxSpeed,
+        $caloriesBurned,
+        $stepCount,
+        $rpe,
+        $tempoVariability,
+        $feeling,
+        $runSessionId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function getRunOutdoorSessionByTrainingSession(int $sessionId): ?array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('SELECT * FROM `run_outdoor_sessions` WHERE `session_id` = ?');
+    $stmt->execute([$sessionId]);
+    return $stmt->fetch() ?: null;
+}
+
+function saveRunOutdoorSplits(int $runSessionId, array $splits): void {
+    $pdo = getDB();
+    $pdo->prepare('DELETE FROM `run_outdoor_splits` WHERE `run_session_id` = ?')->execute([$runSessionId]);
+
+    if (empty($splits)) {
+        return;
+    }
+
+    $ins = $pdo->prepare(
+        'INSERT INTO `run_outdoor_splits` (`run_session_id`, `km_marker`, `split_time`, `pace`, `max_speed_at_km`)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+
+    foreach ($splits as $split) {
+        $ins->execute([
+            $runSessionId,
+            (float)$split['km_marker'],
+            $split['split_time'],
+            $split['pace'] ?? null,
+            $split['max_speed_at_km'] ?? null,
+        ]);
+    }
+}
+
+function getRunOutdoorSplits(int $runSessionId): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT * FROM `run_outdoor_splits`
+         WHERE `run_session_id` = ?
+         ORDER BY `km_marker` ASC'
+    );
+    $stmt->execute([$runSessionId]);
+    return $stmt->fetchAll();
+}
+
+function getRunOutdoorHistory(int $athleteId, int $limit = 10): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT ros.*, ts.completed_at, ts.started_at AS ts_started_at
+         FROM `run_outdoor_sessions` ros
+         JOIN `training_sessions` ts ON ts.id = ros.session_id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+         ORDER BY ts.completed_at DESC
+         LIMIT ?'
+    );
+    $stmt->execute([$athleteId, $limit]);
+    return $stmt->fetchAll();
+}
+
+function calculateRunOutdoorStats(int $athleteId, int $daysBack = 30): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) as total_runs,
+                SUM(ros.distance_km) as total_km,
+                AVG(ros.distance_km) as avg_km,
+                SUM(ros.calories_burned) as total_calories,
+                SUM(ros.duration_seconds) as total_seconds
+         FROM `run_outdoor_sessions` ros
+         JOIN `training_sessions` ts ON ts.id = ros.session_id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.completed_at >= DATE_SUB(NOW(), INTERVAL ? DAY)'
+    );
+    $stmt->execute([$athleteId, $daysBack]);
+    $row = $stmt->fetch();
+
+    return [
+        'total_runs'       => (int)($row['total_runs'] ?? 0),
+        'total_km'         => (float)($row['total_km'] ?? 0),
+        'avg_km'           => (float)($row['avg_km'] ?? 0),
+        'total_calories'   => (int)($row['total_calories'] ?? 0),
+        'total_seconds'    => (int)($row['total_seconds'] ?? 0),
+        'avg_pace_seconds' => ($row['total_seconds'] ?? 0) > 0 && ($row['total_km'] ?? 0) > 0
+            ? (int)($row['total_seconds'] / $row['total_km'])
+            : 0,
+    ];
+}
+
+// ============================================================
+// Speciální sporty – Golf
+// ============================================================
+
+function createGolfSession(int $sessionId): int {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'INSERT INTO `golf_sessions`
+            (`session_id`, `course_name`, `num_holes`, `game_type`, `started_at`, `created_at`)
+         VALUES (?, "Nezadano", 18, "training", NOW(), NOW())
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)'
+    );
+    $stmt->execute([$sessionId]);
+    return (int)$pdo->lastInsertId();
+}
+
+function updateGolfSession(
+    int $golfSessionId,
+    string $courseName,
+    int $numHoles,
+    string $gameType,
+    ?float $distanceKm = null,
+    ?int $caloriesBurned = null,
+    ?string $weather = null,
+    ?string $players = null,
+    ?float $handicapAfter = null,
+    ?string $feeling = null,
+    ?int $durationMinutes = null
+): bool {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'UPDATE `golf_sessions`
+         SET `course_name` = ?,
+             `num_holes` = ?,
+             `game_type` = ?,
+             `distance_km` = ?,
+             `calories_burned` = ?,
+             `weather` = ?,
+             `players` = ?,
+             `handicap_after` = ?,
+             `feeling` = ?,
+             `duration_minutes` = ?,
+             `ended_at` = NOW(),
+             `updated_at` = NOW()
+         WHERE `id` = ?'
+    );
+
+    $stmt->execute([
+        $courseName,
+        max(1, $numHoles),
+        $gameType,
+        $distanceKm,
+        $caloriesBurned,
+        $weather,
+        $players,
+        $handicapAfter,
+        $feeling,
+        $durationMinutes,
+        $golfSessionId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function getGolfSessionByTrainingSession(int $sessionId): ?array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('SELECT * FROM `golf_sessions` WHERE `session_id` = ?');
+    $stmt->execute([$sessionId]);
+    return $stmt->fetch() ?: null;
+}
+
+function saveGolfHoles(int $golfSessionId, array $holes): void {
+    $pdo = getDB();
+    $pdo->prepare('DELETE FROM `golf_holes` WHERE `golf_session_id` = ?')->execute([$golfSessionId]);
+
+    if (empty($holes)) {
+        return;
+    }
+
+    $ins = $pdo->prepare(
+        'INSERT INTO `golf_holes` (`golf_session_id`, `hole_number`, `par`, `score`, `notes`)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+
+    foreach ($holes as $hole) {
+        $ins->execute([
+            $golfSessionId,
+            (int)$hole['hole_number'],
+            (int)$hole['par'],
+            $hole['score'],
+            $hole['notes'] ?? null,
+        ]);
+    }
+}
+
+function getGolfHoles(int $golfSessionId): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT * FROM `golf_holes`
+         WHERE `golf_session_id` = ?
+         ORDER BY `hole_number` ASC'
+    );
+    $stmt->execute([$golfSessionId]);
+    return $stmt->fetchAll();
+}
+
+function getGolfHistory(int $athleteId, int $limit = 10): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT gs.*, ts.completed_at, ts.started_at AS ts_started_at,
+                COALESCE(SUM(gh.score), 0) AS total_score,
+                COALESCE(SUM(gh.par), 0) AS total_par
+         FROM `golf_sessions` gs
+         JOIN `training_sessions` ts ON ts.id = gs.session_id
+         LEFT JOIN `golf_holes` gh ON gh.golf_session_id = gs.id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+         GROUP BY gs.id, ts.completed_at, ts.started_at
+         ORDER BY ts.completed_at DESC
+         LIMIT ?'
+    );
+    $stmt->execute([$athleteId, $limit]);
+    return $stmt->fetchAll();
+}
+
+function calculateGolfStats(int $athleteId, int $daysBack = 90): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(DISTINCT gs.id) AS total_rounds,
+                AVG(gs.handicap_after) AS avg_handicap,
+                COALESCE(SUM(gs.distance_km), 0) AS total_km,
+                COALESCE(SUM(gs.calories_burned), 0) AS total_calories,
+                COALESCE(SUM(gh.score), 0) AS total_score,
+                COALESCE(SUM(gh.par), 0) AS total_par
+         FROM `golf_sessions` gs
+         JOIN `training_sessions` ts ON ts.id = gs.session_id
+         LEFT JOIN `golf_holes` gh ON gh.golf_session_id = gs.id
+         WHERE ts.athlete_id = ?
+           AND ts.completed_at IS NOT NULL
+           AND ts.completed_at >= DATE_SUB(NOW(), INTERVAL ? DAY)'
+    );
+    $stmt->execute([$athleteId, $daysBack]);
+    $row = $stmt->fetch();
+
+    return [
+        'total_rounds'   => (int)($row['total_rounds'] ?? 0),
+        'avg_handicap'   => $row['avg_handicap'] !== null ? (float)$row['avg_handicap'] : null,
+        'total_km'       => (float)($row['total_km'] ?? 0),
+        'total_calories' => (int)($row['total_calories'] ?? 0),
+        'total_score'    => (int)($row['total_score'] ?? 0),
+        'total_par'      => (int)($row['total_par'] ?? 0),
+    ];
+}
