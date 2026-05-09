@@ -53,6 +53,8 @@ if (!$golfSession) {
     $golfSession = getGolfSessionByTrainingSession($sessionId);
 }
 
+$courseId = (int)($input['course_id'] ?? 0);
+$teeId = (int)($input['tee_id'] ?? 0);
 $courseName = trim((string)($input['course_name'] ?? ''));
 $numHoles = (int)($input['num_holes'] ?? 18);
 $gameType = (string)($input['game_type'] ?? 'training');
@@ -90,6 +92,14 @@ $courseRating = $courseRatingRaw !== '' ? (float)$courseRatingRaw : null;
 $slopeRating = $slopeRatingRaw !== '' ? (int)$slopeRatingRaw : null;
 $durationMinutes = $durationRaw !== '' ? (int)$durationRaw : null;
 
+$selectedTee = $teeId > 0 ? getGolfCourseTeeById($teeId) : null;
+if ($selectedTee) {
+    $courseId = (int)$selectedTee['course_id'];
+    $courseName = (string)$selectedTee['course_name'];
+    $courseRating = (float)$selectedTee['course_rating'];
+    $slopeRating = (int)$selectedTee['slope_rating'];
+}
+
 if ($startingHandicap === null && getLatestCountedGolfHandicap($athleteId) === null) {
     echo json_encode(['success' => false, 'error' => 'První golf vyžaduje zadat startovní HCP']);
     exit;
@@ -106,7 +116,10 @@ updateGolfSession(
     $players !== '' ? $players : null,
     null,
     $feeling !== '' ? $feeling : null,
-    $durationMinutes
+    $durationMinutes,
+    $courseId > 0 ? $courseId : null,
+    $teeId > 0 ? $teeId : null,
+    $selectedTee ? ((string)$selectedTee['tee_name'] . ' (' . (string)$selectedTee['gender'] . ')') : null
 );
 
 $holesInput = $input['holes'] ?? [];

@@ -35,13 +35,31 @@ if (!$golfSession) {
     $golfSession = getGolfSessionByTrainingSession($sessionId);
 }
 
+$golfCourses = getGolfCourses();
+$teesByCourse = [];
+foreach ($golfCourses as $course) {
+    $courseId = (int)$course['id'];
+    $teesByCourse[$courseId] = getGolfCourseTees($courseId);
+}
+
+$selectedCourseId = (int)($golfSession['course_id'] ?? 0);
+$selectedTeeId = (int)($golfSession['tee_id'] ?? 0);
+$selectedTee = $selectedTeeId > 0 ? getGolfCourseTeeById($selectedTeeId) : null;
+if ($selectedTee && $selectedCourseId === 0) {
+    $selectedCourseId = (int)$selectedTee['course_id'];
+}
+
 $defaultStartingHandicap = getLatestCountedGolfHandicap((int)$session['athlete_id']);
 $handicapBefore = $golfSession['handicap_before'] !== null
     ? (float)$golfSession['handicap_before']
     : $defaultStartingHandicap;
 $countForHandicap = (int)($golfSession['count_for_handicap'] ?? 1) === 1;
-$courseRating = $golfSession['course_rating'] !== null ? (float)$golfSession['course_rating'] : 72.0;
-$slopeRating = $golfSession['slope_rating'] !== null ? (int)$golfSession['slope_rating'] : 113;
+$courseRating = $golfSession['course_rating'] !== null
+    ? (float)$golfSession['course_rating']
+    : ($selectedTee ? (float)$selectedTee['course_rating'] : 72.0);
+$slopeRating = $golfSession['slope_rating'] !== null
+    ? (int)$golfSession['slope_rating']
+    : ($selectedTee ? (int)$selectedTee['slope_rating'] : 113);
 
 $savedHoles = getGolfHoles((int)$golfSession['id']);
 $savedScoreTotal = calculateGolfScoreTotal($savedHoles);
@@ -62,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     }
 
     $courseName = trim($_POST['course_name'] ?? '');
+    $courseId = intParam($_POST, 'course_id', 0);
+    $teeId = intParam($_POST, 'tee_id', 0);
     $numHoles = intParam($_POST, 'num_holes', 18);
     $gameType = (string)($_POST['game_type'] ?? 'training');
     $distanceKm = $_POST['distance_km'] !== '' ? (float)$_POST['distance_km'] : null;
@@ -70,10 +90,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     $players = trim($_POST['players'] ?? '');
     $handicapBefore = $_POST['handicap_before'] !== '' ? (float)$_POST['handicap_before'] : null;
     $countForHandicap = isset($_POST['count_for_handicap']);
-    $courseRating = $_POST['course_rating'] !== '' ? (float)$_POST['course_rating'] : 72.0;
-    $slopeRating = $_POST['slope_rating'] !== '' ? (int)$_POST['slope_rating'] : 113;
+    $courseRating = $_POST['course_rating'] !== '' ? (float)$_POST['course_rating'] : null;
+    $slopeRating = $_POST['slope_rating'] !== '' ? (int)$_POST['slope_rating'] : null;
     $durationMinutes = $_POST['duration_minutes'] !== '' ? (int)$_POST['duration_minutes'] : null;
     $feeling = trim($_POST['feeling'] ?? '');
+
+    $selectedTee = $teeId > 0 ? getGolfCourseTeeById($teeId) : null;
+    if ($selectedTee) {
+        $courseId = (int)$selectedTee['course_id'];
+        $courseName = (string)$selectedTee['course_name'];
+        $courseRating = (float)$selectedTee['course_rating'];
+        $slopeRating = (int)$selectedTee['slope_rating'];
+    }
 
     if ($handicapBefore === null && $defaultStartingHandicap === null) {
         flash('danger', 'První golf vyžaduje zadat startovní HCP.');
@@ -87,6 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
 
     if ($courseName === '') {
         $courseName = 'Nezadano';
+    }
+
+    if ($courseRating === null || $slopeRating === null) {
+        flash('danger', 'Vyberte odpaliště nebo doplňte course/slope rating.');
+        redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
     }
 
     if ($numHoles <= 0) {
@@ -107,7 +140,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $players !== '' ? $players : null,
         null,
         $feeling !== '' ? $feeling : null,
-        $durationMinutes
+        $durationMinutes,
+        $courseId > 0 ? $courseId : null,
+        $teeId > 0 ? $teeId : null,
+        $selectedTee ? ((string)$selectedTee['tee_name'] . ' (' . (string)$selectedTee['gender'] . ')') : null
     );
 
     $holeNumbers = $_POST['hole_number'] ?? [];
@@ -202,8 +238,25 @@ renderHeader('Golf - detail');
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Hřiště</label>
-                                <input type="text" class="form-control" name="course_name"
+                                <select class="form-select" name="course_id" id="golf-course-id">
+                                    <option value="0">Ruční zadání</option>
+                                    <?php foreach ($golfCourses as $course): ?>
+                                    <option value="<?= (int)$course['id'] ?>" <?= $selectedCourseId === (int)$course['id'] ? 'selected' : '' ?>>
+                                        <?= h((string)$course['name']) ?><?= !empty($course['location']) ? ' - ' . h((string)$course['location']) : '' ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="text" class="form-control mt-2" name="course_name" id="golf-course-name"
                                        value="<?= h((string)$golfSession['course_name']) ?>" placeholder="např. Albatross">
+                                <small class="text-muted">Vyber hřiště z databáze, nebo zadej ručně.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Odpaliště</label>
+                                <select class="form-select" name="tee_id" id="golf-tee-id">
+                                    <option value="0">Bez odpaliště</option>
+                                </select>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -213,7 +266,10 @@ renderHeader('Golf - detail');
                                        min="1" max="36" value="<?= $numHolesForForm ?>">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Typ hry</label>
                                 <select class="form-select" name="game_type">
@@ -221,6 +277,22 @@ renderHeader('Golf - detail');
                                     <option value="friendly" <?= $golfSession['game_type'] === 'friendly' ? 'selected' : '' ?>>Přátelské</option>
                                     <option value="tournament" <?= $golfSession['game_type'] === 'tournament' ? 'selected' : '' ?>>Turnaj</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Course rating</label>
+                                <input type="number" class="form-control" step="0.1" min="0" name="course_rating" id="golf-course-rating"
+                                       value="<?= h((string)$courseRating) ?>"
+                                       placeholder="např. 72.0">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Slope rating</label>
+                                <input type="number" class="form-control" min="1" name="slope_rating" id="golf-slope-rating"
+                                       value="<?= h((string)$slopeRating) ?>"
+                                       placeholder="např. 113">
                             </div>
                         </div>
                     </div>
@@ -241,19 +313,10 @@ renderHeader('Golf - detail');
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Course rating</label>
-                                <input type="number" class="form-control" step="0.1" min="0" name="course_rating"
-                                       value="<?= h((string)$courseRating) ?>"
-                                       placeholder="např. 72.0">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Slope rating</label>
-                                <input type="number" class="form-control" min="1" name="slope_rating"
-                                       value="<?= h((string)$slopeRating) ?>"
-                                       placeholder="např. 113">
+                            <div class="mb-3 d-flex flex-column justify-content-end h-100">
+                                <div class="alert alert-light border mb-0 py-2 small">
+                                    CR/SR se při výběru odpaliště načte automaticky.
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -468,11 +531,75 @@ const golfForm = document.getElementById('golf-form');
 const autosaveStatus = document.getElementById('golf-autosave-status');
 const apiUrl = '<?= BASE_URL ?>/api/save_golf_draft.php';
 const sessionId = <?= (int)$sessionId ?>;
+const teesByCourse = <?= json_encode($teesByCourse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const initialCourseId = <?= (int)$selectedCourseId ?>;
+const initialTeeId = <?= (int)$selectedTeeId ?>;
 
 let saveTimer = null;
 let saveInProgress = false;
 let pendingSave = false;
 let lastSavedHash = '';
+
+function rebuildTeeOptions(courseId, teeId = 0) {
+    const teeSelect = document.getElementById('golf-tee-id');
+    const courseRatingInput = document.getElementById('golf-course-rating');
+    const slopeRatingInput = document.getElementById('golf-slope-rating');
+    const courseNameInput = document.getElementById('golf-course-name');
+    if (!teeSelect) return;
+
+    teeSelect.innerHTML = '';
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '0';
+    emptyOpt.textContent = 'Bez odpaliště';
+    teeSelect.appendChild(emptyOpt);
+
+    const list = teesByCourse[String(courseId)] || [];
+    list.forEach(function(tee) {
+        const opt = document.createElement('option');
+        opt.value = String(tee.id);
+        opt.textContent = tee.tee_name + ' (' + tee.gender + ') - CR ' + tee.course_rating + ' / SR ' + tee.slope_rating;
+        if (parseInt(tee.id, 10) === parseInt(teeId, 10)) {
+            opt.selected = true;
+            if (courseRatingInput) courseRatingInput.value = tee.course_rating;
+            if (slopeRatingInput) slopeRatingInput.value = tee.slope_rating;
+        }
+        teeSelect.appendChild(opt);
+    });
+
+    const hasSelected = list.some(function(tee) { return parseInt(tee.id, 10) === parseInt(teeId, 10); });
+    if (!hasSelected && courseRatingInput && slopeRatingInput && list.length > 0) {
+        const first = list[0];
+        teeSelect.value = String(first.id);
+        courseRatingInput.value = first.course_rating;
+        slopeRatingInput.value = first.slope_rating;
+    }
+
+    if (courseNameInput) {
+        courseNameInput.readOnly = parseInt(courseId, 10) > 0;
+    }
+}
+
+document.getElementById('golf-course-id')?.addEventListener('change', function() {
+    const courseId = parseInt(this.value || '0', 10);
+    rebuildTeeOptions(courseId, 0);
+    scheduleGolfAutosave();
+});
+
+document.getElementById('golf-tee-id')?.addEventListener('change', function() {
+    const courseId = parseInt(document.getElementById('golf-course-id')?.value || '0', 10);
+    const teeId = parseInt(this.value || '0', 10);
+    const list = teesByCourse[String(courseId)] || [];
+    const selected = list.find(function(tee) { return parseInt(tee.id, 10) === teeId; });
+    if (selected) {
+        const courseRatingInput = document.getElementById('golf-course-rating');
+        const slopeRatingInput = document.getElementById('golf-slope-rating');
+        if (courseRatingInput) courseRatingInput.value = selected.course_rating;
+        if (slopeRatingInput) slopeRatingInput.value = selected.slope_rating;
+    }
+    scheduleGolfAutosave();
+});
+
+rebuildTeeOptions(initialCourseId, initialTeeId);
 
 function setStatus(text, cls) {
     autosaveStatus.classList.remove('text-muted', 'text-success', 'text-danger');
@@ -483,6 +610,8 @@ function setStatus(text, cls) {
 function collectGolfPayload() {
     const payload = {
         session_id: sessionId,
+        course_id: parseInt(golfForm.querySelector('[name="course_id"]')?.value || '0', 10) || 0,
+        tee_id: parseInt(golfForm.querySelector('[name="tee_id"]')?.value || '0', 10) || 0,
         course_name: (golfForm.querySelector('[name="course_name"]')?.value || '').trim(),
         num_holes: parseInt(golfForm.querySelector('[name="num_holes"]')?.value || '18', 10) || 18,
         game_type: golfForm.querySelector('[name="game_type"]')?.value || 'training',

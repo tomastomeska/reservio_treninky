@@ -104,6 +104,49 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     if (!$stmtGolfDiff->fetch()) {
         $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN score_differential DECIMAL(5,1) NULL AFTER score_total');
     }
+    $stmtGolfCourseId = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'course_id'");
+    if (!$stmtGolfCourseId->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN course_id INT NULL AFTER session_id');
+    }
+    $stmtGolfTeeId = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'tee_id'");
+    if (!$stmtGolfTeeId->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN tee_id INT NULL AFTER course_id');
+    }
+    $stmtGolfTeeName = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'tee_name'");
+    if (!$stmtGolfTeeName->fetch()) {
+        $pdo->exec('ALTER TABLE golf_sessions ADD COLUMN tee_name VARCHAR(80) NULL AFTER tee_id');
+    }
+
+    // Databáze golfových hřišť a odpališť
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `golf_courses` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `name`       VARCHAR(255) NOT NULL,
+            `location`   VARCHAR(255) NULL,
+            `is_active`  TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY `uq_golf_course_name` (`name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `golf_course_tees` (
+            `id`            INT AUTO_INCREMENT PRIMARY KEY,
+            `course_id`     INT NOT NULL,
+            `tee_name`      VARCHAR(80) NOT NULL,
+            `gender`        ENUM('men','women','unisex') NOT NULL DEFAULT 'unisex',
+            `par`           INT NOT NULL DEFAULT 72,
+            `course_rating` DECIMAL(4,1) NOT NULL,
+            `slope_rating`  SMALLINT NOT NULL,
+            `length_m`      INT NULL,
+            `is_active`     TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at`    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at`    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY `uq_course_tee_gender` (`course_id`, `tee_name`, `gender`),
+            KEY `idx_tee_course` (`course_id`),
+            CONSTRAINT `fk_tee_course` FOREIGN KEY (`course_id`) REFERENCES `golf_courses`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 
     // Soft-delete tréninku trenérem (pro admin obnovu)
     $stmtTsDeleted = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_at'");
@@ -595,12 +638,18 @@ function updateGolfSession(
     ?string $players = null,
     ?float $handicapAfter = null,
     ?string $feeling = null,
-    ?int $durationMinutes = null
+    ?int $durationMinutes = null,
+    ?int $courseId = null,
+    ?int $teeId = null,
+    ?string $teeName = null
 ): bool {
     $pdo = getDB();
     $stmt = $pdo->prepare(
         'UPDATE `golf_sessions`
-         SET `course_name` = ?,
+         SET `course_id` = ?,
+             `tee_id` = ?,
+             `tee_name` = ?,
+             `course_name` = ?,
              `num_holes` = ?,
              `game_type` = ?,
              `distance_km` = ?,
@@ -616,6 +665,9 @@ function updateGolfSession(
     );
 
     $stmt->execute([
+        $courseId,
+        $teeId,
+        $teeName,
         $courseName,
         max(1, $numHoles),
         $gameType,
@@ -673,6 +725,43 @@ function getGolfSessionByTrainingSession(int $sessionId): ?array {
     $pdo = getDB();
     $stmt = $pdo->prepare('SELECT * FROM `golf_sessions` WHERE `session_id` = ?');
     $stmt->execute([$sessionId]);
+    return $stmt->fetch() ?: null;
+}
+
+function getGolfCourses(): array {
+    $pdo = getDB();
+    $stmt = $pdo->query(
+        'SELECT gc.*, COUNT(gct.id) AS tees_count
+         FROM `golf_courses` gc
+         LEFT JOIN `golf_course_tees` gct ON gct.course_id = gc.id AND gct.is_active = 1
+         WHERE gc.is_active = 1
+         GROUP BY gc.id
+         ORDER BY gc.name ASC'
+    );
+    return $stmt->fetchAll();
+}
+
+function getGolfCourseTees(int $courseId): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT *
+         FROM `golf_course_tees`
+         WHERE `course_id` = ? AND `is_active` = 1
+         ORDER BY `tee_name` ASC, `gender` ASC'
+    );
+    $stmt->execute([$courseId]);
+    return $stmt->fetchAll();
+}
+
+function getGolfCourseTeeById(int $teeId): ?array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT gct.*, gc.name AS course_name, gc.location AS course_location
+         FROM `golf_course_tees` gct
+         JOIN `golf_courses` gc ON gc.id = gct.course_id
+         WHERE gct.id = ? AND gct.is_active = 1 AND gc.is_active = 1'
+    );
+    $stmt->execute([$teeId]);
     return $stmt->fetch() ?: null;
 }
 

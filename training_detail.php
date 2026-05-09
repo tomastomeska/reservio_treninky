@@ -374,6 +374,7 @@ renderHeader('Detail tréninku');
                 <table class="table table-sm mb-0">
                     <tbody>
                         <tr><th style="width:40%">Hřiště</th><td><?= h((string)($golfSession['course_name'] ?? '–')) ?></td></tr>
+                        <tr><th>Odpaliště</th><td><?= h((string)($golfSession['tee_name'] ?? '–')) ?></td></tr>
                         <tr><th>Typ hry</th><td><?= h((string)($golfSession['game_type'] ?? '–')) ?></td></tr>
                         <tr><th>Jamky</th><td><?= h((string)($golfSession['num_holes'] ?? '–')) ?></td></tr>
                         <tr><th>Doba</th><td><?= !empty($golfSession['duration_minutes']) ? (int)$golfSession['duration_minutes'] . ' min' : '–' ?></td></tr>

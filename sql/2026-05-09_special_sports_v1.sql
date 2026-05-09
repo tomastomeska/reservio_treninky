@@ -19,6 +19,9 @@ ALTER TABLE `training_session_exercises` ADD COLUMN `sport_type` ENUM('standard'
 CREATE TABLE IF NOT EXISTS `golf_sessions` (
     `id`                 INT AUTO_INCREMENT PRIMARY KEY,
     `session_id`         INT NOT NULL UNIQUE,
+    `course_id`          INT NULL,
+    `tee_id`             INT NULL,
+    `tee_name`           VARCHAR(80) NULL,
     `course_name`        VARCHAR(255) NOT NULL,
     `num_holes`          INT NOT NULL DEFAULT 18,
     `game_type`          ENUM('training', 'tournament', 'friendly') NOT NULL DEFAULT 'training',
@@ -41,6 +44,33 @@ CREATE TABLE IF NOT EXISTS `golf_sessions` (
     `updated_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE,
     KEY `idx_golf_session` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `golf_courses` (
+    `id`                 INT AUTO_INCREMENT PRIMARY KEY,
+    `name`               VARCHAR(255) NOT NULL,
+    `location`           VARCHAR(255) NULL,
+    `is_active`          TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_golf_course_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `golf_course_tees` (
+    `id`                 INT AUTO_INCREMENT PRIMARY KEY,
+    `course_id`          INT NOT NULL,
+    `tee_name`           VARCHAR(80) NOT NULL,
+    `gender`             ENUM('men','women','unisex') NOT NULL DEFAULT 'unisex',
+    `par`                INT NOT NULL DEFAULT 72,
+    `course_rating`      DECIMAL(4,1) NOT NULL,
+    `slope_rating`       SMALLINT NOT NULL,
+    `length_m`           INT NULL,
+    `is_active`          TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_course_tee_gender` (`course_id`, `tee_name`, `gender`),
+    KEY `idx_tee_course` (`course_id`),
+    FOREIGN KEY (`course_id`) REFERENCES `golf_courses`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `golf_holes` (
