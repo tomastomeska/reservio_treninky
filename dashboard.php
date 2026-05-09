@@ -33,6 +33,44 @@ $stmt = $pdo->prepare(
 $stmt->execute([$coachId]);
 $athletes = $stmt->fetchAll();
 
+$activeSessionsStmt = $pdo->prepare(
+    'SELECT ts.id AS session_id,
+            ts.athlete_id,
+            ts.paired_session_id,
+            ts.started_at,
+            a.first_name,
+            a.last_name,
+            ws.name AS set_name
+     FROM training_sessions ts
+     JOIN athletes a ON a.id = ts.athlete_id
+     JOIN workout_sets ws ON ws.id = ts.workout_set_id
+     WHERE a.coach_id = ?
+       AND ts.completed_at IS NULL
+       AND ts.deleted_by_coach_at IS NULL
+     ORDER BY COALESCE(ts.paired_session_id, ts.id) DESC, ts.started_at DESC'
+);
+$activeSessionsStmt->execute([$coachId]);
+$activeSessions = $activeSessionsStmt->fetchAll();
+
+$activeIndividualSessions = [];
+$activePairedSessions = [];
+foreach ($activeSessions as $session) {
+    if (!empty($session['paired_session_id'])) {
+        $pairedId = (int)$session['paired_session_id'];
+        if (!isset($activePairedSessions[$pairedId])) {
+            $activePairedSessions[$pairedId] = [
+                'paired_session_id' => $pairedId,
+                'started_at' => $session['started_at'],
+                'sessions' => [],
+            ];
+        }
+        $activePairedSessions[$pairedId]['sessions'][] = $session;
+        continue;
+    }
+
+    $activeIndividualSessions[] = $session;
+}
+
 renderHeader('Dashboard');
 ?>
 
@@ -49,6 +87,87 @@ renderHeader('Dashboard');
         </a>
     </div>
 </div>
+
+<?php if (!empty($activeIndividualSessions) || !empty($activePairedSessions)): ?>
+<div class="alert alert-info border-0 shadow-sm d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between mb-4">
+    <div>
+        <div class="fw-bold mb-1">
+            <i class="fas fa-circle-play me-1"></i>Probíhající tréninky
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <span class="badge bg-success text-dark px-3 py-2">
+                Počet probíhajících neukončených tréninků: <?= count($activeIndividualSessions) ?>
+            </span>
+            <span class="badge bg-info text-dark px-3 py-2">
+                Počet probíhajících neukončených párových tréninků: <?= count($activePairedSessions) ?>
+            </span>
+        </div>
+    </div>
+    <a href="#active-trainings" class="btn btn-dark btn-sm fw-bold align-self-start align-self-lg-center">
+        <i class="fas fa-arrow-down me-1"></i>Zobrazit
+    </a>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($activeIndividualSessions) || !empty($activePairedSessions)): ?>
+<div class="card border-0 shadow-sm mb-4" id="active-trainings">
+    <div class="card-header bg-dark text-white fw-bold">
+        <i class="fas fa-stopwatch me-2"></i>Aktivní tréninky
+    </div>
+    <div class="card-body">
+        <?php if (!empty($activeIndividualSessions)): ?>
+        <div class="mb-4">
+            <div class="fw-semibold mb-2">Individuální</div>
+            <div class="row g-2">
+                <?php foreach ($activeIndividualSessions as $session): ?>
+                <div class="col-md-6 col-xl-4">
+                    <div class="border rounded-3 p-3 h-100 bg-light">
+                        <div class="fw-bold"><?= h($session['first_name'] . ' ' . $session['last_name']) ?></div>
+                        <div class="text-muted small mb-2"><?= h($session['set_name']) ?> · <?= formatDateTime($session['started_at']) ?></div>
+                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= (int)$session['session_id'] ?>"
+                           class="btn btn-sm btn-warning fw-bold">
+                            <i class="fas fa-play me-1"></i>Pokračovat
+                        </a>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($activePairedSessions)): ?>
+        <div>
+            <div class="fw-semibold mb-2">Párové</div>
+            <div class="row g-2">
+                <?php foreach ($activePairedSessions as $pair): ?>
+                <div class="col-md-6 col-xl-4">
+                    <div class="border rounded-3 p-3 h-100 bg-light">
+                        <div class="fw-bold mb-1">
+                            <i class="fas fa-people-group me-1 text-info"></i>Párový trénink
+                        </div>
+                        <div class="text-muted small mb-2">
+                            <?= count($pair['sessions']) ?> sportovci · <?= formatDateTime($pair['started_at']) ?>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            <?php foreach ($pair['sessions'] as $session): ?>
+                            <span class="badge bg-white text-dark border">
+                                <?= h($session['first_name'] . ' ' . $session['last_name']) ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                        <a href="<?= BASE_URL ?>/training_paired_session.php?id=<?= (int)$pair['paired_session_id'] ?>"
+                           class="btn btn-sm btn-info text-dark fw-bold">
+                            <i class="fas fa-play me-1"></i>Pokračovat společně
+                        </a>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if (empty($athletes)): ?>
 <div class="card border-0 shadow-sm">
@@ -87,6 +206,23 @@ renderHeader('Dashboard');
                     </span>
                 </div>
 
+                <?php if ($a['active_session_id']): ?>
+                <div class="mb-3">
+                    <span class="badge <?= $a['active_paired_session_id'] ? 'bg-info text-dark' : 'bg-success' ?> me-1">
+                        <i class="fas <?= $a['active_paired_session_id'] ? 'fa-people-group' : 'fa-circle-play' ?> me-1"></i>
+                        <?= $a['active_paired_session_id'] ? 'Probíhá párový trénink' : 'Probíhá trénink' ?>
+                    </span>
+                    <span class="badge bg-light text-dark border">
+                        <i class="fas fa-layer-group me-1"></i><?= h($a['active_set_name'] ?? '') ?>
+                    </span>
+                    <?php if (!empty($a['active_session_started_at'])): ?>
+                    <div class="small text-muted mt-1">
+                        <i class="fas fa-clock me-1"></i>Od <?= formatDateTime($a['active_session_started_at']) ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
                 <?php if ($a['email']): ?>
                 <p class="text-muted small mb-2">
                     <i class="fas fa-envelope me-1"></i><?= h($a['email']) ?>
@@ -119,10 +255,17 @@ renderHeader('Dashboard');
                        class="btn btn-dark btn-sm flex-fill">
                         <i class="fas fa-user me-1"></i>Detail
                     </a>
+                    <?php if ($a['active_session_id']): ?>
+                    <a href="<?= $a['active_paired_session_id'] ? BASE_URL . '/training_paired_session.php?id=' . (int)$a['active_paired_session_id'] : BASE_URL . '/training_session.php?id=' . (int)$a['active_session_id'] ?>"
+                       class="btn <?= $a['active_paired_session_id'] ? 'btn-info text-dark' : 'btn-warning' ?> btn-sm flex-fill fw-bold">
+                        <i class="fas fa-play me-1"></i>Pokračovat
+                    </a>
+                    <?php else: ?>
                     <a href="<?= BASE_URL ?>/training_new.php?athlete_id=<?= $a['id'] ?>"
                        class="btn btn-warning btn-sm flex-fill">
                         <i class="fas fa-play me-1"></i>Trénink
                     </a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
