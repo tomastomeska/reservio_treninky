@@ -131,6 +131,33 @@ function getSessionExercises(int $sessionId, int $setId): array {
     $snapshot->execute([$sessionId]);
     $snapshotRows = $snapshot->fetchAll();
     if (!empty($snapshotRows)) {
+      $needsSportType = false;
+      foreach ($snapshotRows as $row) {
+        if (!isset($row['sport_type']) || $row['sport_type'] === '' || $row['sport_type'] === null) {
+          $needsSportType = true;
+          break;
+        }
+      }
+
+      if ($needsSportType) {
+        $ids = array_values(array_unique(array_map(fn($row) => (int)$row['exercise_id'], $snapshotRows)));
+        if (!empty($ids)) {
+          $inClause = implode(',', array_fill(0, count($ids), '?'));
+          $stmtTypes = $pdo->prepare("SELECT id, sport_type FROM exercises WHERE id IN ($inClause)");
+          $stmtTypes->execute($ids);
+          $typesById = [];
+          foreach ($stmtTypes->fetchAll() as $typeRow) {
+            $typesById[(int)$typeRow['id']] = $typeRow['sport_type'] ?? 'standard';
+          }
+          foreach ($snapshotRows as &$row) {
+            if (!isset($row['sport_type']) || $row['sport_type'] === '' || $row['sport_type'] === null) {
+              $row['sport_type'] = $typesById[(int)$row['exercise_id']] ?? 'standard';
+            }
+          }
+          unset($row);
+        }
+      }
+
         return $snapshotRows;
     }
 

@@ -128,16 +128,30 @@ renderHeader('Párový trénink');
             $key      = $sid . '-' . $eid;
             $series   = $sd['series'][$eid]  ?? [];
             $lastComp = $sd['lastComp'][$eid] ?? null;
+            $sportType = $ex['sport_type'] ?? 'standard';
+            $typeLabels = [
+                'golf' => 'Golf',
+                'run_outdoor' => 'Běh venku',
+                'run_treadmill' => 'Běh na páse',
+            ];
         ?>
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header d-flex align-items-center bg-dark text-white py-2 gap-2">
                 <span class="badge bg-warning text-dark"><?= $ex['exercise_order'] ?></span>
                 <span class="fw-bold"><?= h($ex['exercise_name']) ?></span>
+                <?php if ($sportType !== 'standard'): ?>
+                <span class="badge bg-info text-dark ms-1 small"><?= h($typeLabels[$sportType] ?? 'Speciální sport') ?></span>
+                <?php endif; ?>
                 <span class="ms-auto badge bg-secondary small" id="series-count-<?= $key ?>">
+                    <?php if ($sportType === 'standard'): ?>
                     <?= count($series) ?> séri<?= count($series) === 1 ? 'e' : 'í' ?>
+                    <?php else: ?>
+                    speciální
+                    <?php endif; ?>
                 </span>
             </div>
             <div class="card-body p-0">
+                <?php if ($sportType === 'standard'): ?>
                 <!-- Tabulka sérií -->
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered mb-0 align-middle text-center"
@@ -236,6 +250,29 @@ renderHeader('Párový trénink');
                         </div>
                     </div>
                 </div>
+                <?php else: ?>
+                <div class="p-3">
+                    <div class="alert alert-info mb-2">
+                        <i class="fas fa-circle-info me-1"></i>
+                        Tento cvik je speciální sport. Použijte dedikovaný formulář pro <?= h($typeLabels[$sportType] ?? 'speciální sport') ?>.
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php if ($sportType === 'golf'): ?>
+                        <a href="<?= BASE_URL ?>/training_golf_detail.php?id=<?= $sid ?>" class="btn btn-success btn-sm fw-bold">
+                            <i class="fas fa-golf-ball me-1"></i>Otevřít golf
+                        </a>
+                        <?php elseif ($sportType === 'run_outdoor'): ?>
+                        <a href="<?= BASE_URL ?>/training_run_outdoor_detail.php?id=<?= $sid ?>" class="btn btn-success btn-sm fw-bold">
+                            <i class="fas fa-person-hiking me-1"></i>Otevřít běh venku
+                        </a>
+                        <?php elseif ($sportType === 'run_treadmill'): ?>
+                        <a href="<?= BASE_URL ?>/training_run_treadmill_detail.php?id=<?= $sid ?>" class="btn btn-success btn-sm fw-bold">
+                            <i class="fas fa-person-running me-1"></i>Otevřít běh na páse
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php endforeach; ?>
