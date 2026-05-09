@@ -110,43 +110,22 @@ renderHeader('Dashboard');
 </div>
 
 <?php if (!empty($activeIndividualSessions) || !empty($activePairedSessions)): ?>
-<div class="alert alert-info border-0 shadow-sm d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between mb-4">
-    <div>
-        <div class="fw-bold mb-1">
-            <i class="fas fa-circle-play me-1"></i>Probíhající tréninky
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            <span class="badge bg-success text-dark px-3 py-2">
-                Počet probíhajících neukončených tréninků: <?= count($activeIndividualSessions) ?>
-            </span>
-            <span class="badge bg-info text-dark px-3 py-2">
-                Počet probíhajících neukončených párových tréninků: <?= count($activePairedSessions) ?>
-            </span>
-        </div>
-    </div>
-    <a href="#active-trainings" class="btn btn-dark btn-sm fw-bold align-self-start align-self-lg-center">
-        <i class="fas fa-arrow-down me-1"></i>Zobrazit
-    </a>
-</div>
-<?php endif; ?>
-
-<?php if (!empty($activeIndividualSessions) || !empty($activePairedSessions)): ?>
-<div class="card border-0 shadow-sm mb-4" id="active-trainings">
-    <div class="card-header bg-dark text-white fw-bold">
+<div class="card border-0 shadow-sm mb-3" id="active-trainings">
+    <div class="card-header bg-dark text-white fw-bold py-2">
         <i class="fas fa-stopwatch me-2"></i>Aktivní tréninky
     </div>
-    <div class="card-body">
+    <div class="card-body py-3">
         <?php if (!empty($activeIndividualSessions)): ?>
-        <div class="mb-4">
-            <div class="fw-semibold mb-2">Individuální</div>
-            <div class="row g-2">
+        <div class="mb-3">
+            <div class="fw-semibold mb-2 small text-uppercase text-muted">Individuální</div>
+            <div class="row g-2 row-cols-1 row-cols-md-2 row-cols-xl-3">
                 <?php foreach ($activeIndividualSessions as $session): ?>
-                <div class="col-md-6 col-xl-4">
-                    <div class="border rounded-3 p-3 h-100 bg-light">
-                        <div class="fw-bold"><?= h($session['first_name'] . ' ' . $session['last_name']) ?></div>
-                        <div class="text-muted small mb-2"><?= h($session['set_name']) ?> · <?= formatDateTime($session['started_at']) ?></div>
+                <div class="col">
+                    <div class="border rounded-3 p-2 h-100 bg-light d-flex flex-column gap-1">
+                        <div class="fw-bold small"><?= h($session['first_name'] . ' ' . $session['last_name']) ?></div>
+                        <div class="text-muted small"><?= h($session['set_name']) ?> · <?= formatDateTime($session['started_at']) ?></div>
                         <a href="<?= BASE_URL ?>/training_session.php?id=<?= (int)$session['session_id'] ?>"
-                           class="btn btn-sm btn-warning fw-bold">
+                           class="btn btn-sm btn-warning fw-bold align-self-start">
                             <i class="fas fa-play me-1"></i>Pokračovat
                         </a>
                     </div>
@@ -158,26 +137,26 @@ renderHeader('Dashboard');
 
         <?php if (!empty($activePairedSessions)): ?>
         <div>
-            <div class="fw-semibold mb-2">Párové</div>
-            <div class="row g-2">
+            <div class="fw-semibold mb-2 small text-uppercase text-muted">Párové</div>
+            <div class="row g-2 row-cols-1 row-cols-md-2 row-cols-xl-3">
                 <?php foreach ($activePairedSessions as $pair): ?>
-                <div class="col-md-6 col-xl-4">
-                    <div class="border rounded-3 p-3 h-100 bg-light">
-                        <div class="fw-bold mb-1">
+                <div class="col">
+                    <div class="border rounded-3 p-2 h-100 bg-light d-flex flex-column gap-1">
+                        <div class="fw-bold small">
                             <i class="fas fa-people-group me-1 text-info"></i>Párový trénink
                         </div>
-                        <div class="text-muted small mb-2">
+                        <div class="text-muted small">
                             <?= count($pair['sessions']) ?> sportovci · <?= formatDateTime($pair['started_at']) ?>
                         </div>
-                        <div class="d-flex flex-wrap gap-1 mb-2">
+                        <div class="d-flex flex-wrap gap-1">
                             <?php foreach ($pair['sessions'] as $session): ?>
-                            <span class="badge bg-white text-dark border">
+                            <span class="badge bg-white text-dark border small">
                                 <?= h($session['first_name'] . ' ' . $session['last_name']) ?>
                             </span>
                             <?php endforeach; ?>
                         </div>
                         <a href="<?= BASE_URL ?>/training_paired_session.php?id=<?= (int)$pair['paired_session_id'] ?>"
-                           class="btn btn-sm btn-info text-dark fw-bold">
+                           class="btn btn-sm btn-info text-dark fw-bold align-self-start">
                             <i class="fas fa-play me-1"></i>Pokračovat společně
                         </a>
                     </div>
