@@ -55,6 +55,7 @@ if (!$golfSession) {
 
 $courseId = (int)($input['course_id'] ?? 0);
 $teeId = (int)($input['tee_id'] ?? 0);
+$teeGender = (string)($input['tee_gender'] ?? 'men');
 $courseName = trim((string)($input['course_name'] ?? ''));
 $numHoles = (int)($input['num_holes'] ?? 18);
 $gameType = (string)($input['game_type'] ?? 'training');
@@ -98,6 +99,7 @@ if ($selectedTee) {
     $courseName = (string)$selectedTee['course_name'];
     $courseRating = (float)$selectedTee['course_rating'];
     $slopeRating = (int)$selectedTee['slope_rating'];
+    $teeGender = (string)$selectedTee['gender'];
 }
 
 if ($startingHandicap === null && getLatestCountedGolfHandicap($athleteId) === null) {
@@ -180,4 +182,5 @@ echo json_encode([
     'handicap_after' => $projection['handicap_after'],
     'score_differential' => $projection['score_differential'],
     'count_for_handicap' => $countForHandicap,
+    'tee_gender' => $teeGender,
 ]);

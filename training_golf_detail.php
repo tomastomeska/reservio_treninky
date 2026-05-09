@@ -48,6 +48,10 @@ $selectedTee = $selectedTeeId > 0 ? getGolfCourseTeeById($selectedTeeId) : null;
 if ($selectedTee && $selectedCourseId === 0) {
     $selectedCourseId = (int)$selectedTee['course_id'];
 }
+$selectedGender = $selectedTee['gender'] ?? 'men';
+if ($selectedGender !== 'men' && $selectedGender !== 'women' && $selectedGender !== 'unisex') {
+    $selectedGender = 'men';
+}
 
 $defaultStartingHandicap = getLatestCountedGolfHandicap((int)$session['athlete_id']);
 $handicapBefore = $golfSession['handicap_before'] !== null
@@ -82,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     $courseName = trim($_POST['course_name'] ?? '');
     $courseId = intParam($_POST, 'course_id', 0);
     $teeId = intParam($_POST, 'tee_id', 0);
+    $teeGender = (string)($_POST['tee_gender'] ?? 'men');
     $numHoles = intParam($_POST, 'num_holes', 18);
     $gameType = (string)($_POST['game_type'] ?? 'training');
     $distanceKm = $_POST['distance_km'] !== '' ? (float)$_POST['distance_km'] : null;
@@ -101,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $courseName = (string)$selectedTee['course_name'];
         $courseRating = (float)$selectedTee['course_rating'];
         $slopeRating = (int)$selectedTee['slope_rating'];
+        $teeGender = (string)$selectedTee['gender'];
     }
 
     if ($handicapBefore === null && $defaultStartingHandicap === null) {
@@ -249,6 +255,17 @@ renderHeader('Golf - detail');
                                 <input type="text" class="form-control mt-2" name="course_name" id="golf-course-name"
                                        value="<?= h((string)$golfSession['course_name']) ?>" placeholder="např. Albatross">
                                 <small class="text-muted">Vyber hřiště z databáze, nebo zadej ručně.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Pohlaví</label>
+                                <select class="form-select" name="tee_gender" id="golf-tee-gender">
+                                    <option value="men" <?= $selectedGender === 'men' ? 'selected' : '' ?>>Muži</option>
+                                    <option value="women" <?= $selectedGender === 'women' ? 'selected' : '' ?>>Ženy</option>
+                                    <option value="unisex" <?= $selectedGender === 'unisex' ? 'selected' : '' ?>>Unisex</option>
+                                </select>
+                                <small class="text-muted">Podle pohlaví se filtrují odpaliště.</small>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -534,13 +551,14 @@ const sessionId = <?= (int)$sessionId ?>;
 const teesByCourse = <?= json_encode($teesByCourse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const initialCourseId = <?= (int)$selectedCourseId ?>;
 const initialTeeId = <?= (int)$selectedTeeId ?>;
+const initialGender = <?= json_encode($selectedGender, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 let saveTimer = null;
 let saveInProgress = false;
 let pendingSave = false;
 let lastSavedHash = '';
 
-function rebuildTeeOptions(courseId, teeId = 0) {
+function rebuildTeeOptions(courseId, gender = 'men', teeId = 0) {
     const teeSelect = document.getElementById('golf-tee-id');
     const courseRatingInput = document.getElementById('golf-course-rating');
     const slopeRatingInput = document.getElementById('golf-slope-rating');
@@ -553,11 +571,13 @@ function rebuildTeeOptions(courseId, teeId = 0) {
     emptyOpt.textContent = 'Bez odpaliště';
     teeSelect.appendChild(emptyOpt);
 
-    const list = teesByCourse[String(courseId)] || [];
+    const list = (teesByCourse[String(courseId)] || []).filter(function(tee) {
+        return tee.gender === gender || tee.gender === 'unisex';
+    });
     list.forEach(function(tee) {
         const opt = document.createElement('option');
         opt.value = String(tee.id);
-        opt.textContent = tee.tee_name + ' (' + tee.gender + ') - CR ' + tee.course_rating + ' / SR ' + tee.slope_rating;
+        opt.textContent = tee.tee_name + ' - ' + (tee.gender === 'men' ? 'muži' : tee.gender === 'women' ? 'ženy' : 'unisex') + ' - CR ' + tee.course_rating + ' / SR ' + tee.slope_rating;
         if (parseInt(tee.id, 10) === parseInt(teeId, 10)) {
             opt.selected = true;
             if (courseRatingInput) courseRatingInput.value = tee.course_rating;
@@ -581,14 +601,24 @@ function rebuildTeeOptions(courseId, teeId = 0) {
 
 document.getElementById('golf-course-id')?.addEventListener('change', function() {
     const courseId = parseInt(this.value || '0', 10);
-    rebuildTeeOptions(courseId, 0);
+    const gender = document.getElementById('golf-tee-gender')?.value || 'men';
+    rebuildTeeOptions(courseId, gender, 0);
+    scheduleGolfAutosave();
+});
+
+document.getElementById('golf-tee-gender')?.addEventListener('change', function() {
+    const courseId = parseInt(document.getElementById('golf-course-id')?.value || '0', 10);
+    rebuildTeeOptions(courseId, this.value || 'men', 0);
     scheduleGolfAutosave();
 });
 
 document.getElementById('golf-tee-id')?.addEventListener('change', function() {
     const courseId = parseInt(document.getElementById('golf-course-id')?.value || '0', 10);
+    const gender = document.getElementById('golf-tee-gender')?.value || 'men';
     const teeId = parseInt(this.value || '0', 10);
-    const list = teesByCourse[String(courseId)] || [];
+    const list = (teesByCourse[String(courseId)] || []).filter(function(tee) {
+        return tee.gender === gender || tee.gender === 'unisex';
+    });
     const selected = list.find(function(tee) { return parseInt(tee.id, 10) === teeId; });
     if (selected) {
         const courseRatingInput = document.getElementById('golf-course-rating');
@@ -599,7 +629,7 @@ document.getElementById('golf-tee-id')?.addEventListener('change', function() {
     scheduleGolfAutosave();
 });
 
-rebuildTeeOptions(initialCourseId, initialTeeId);
+rebuildTeeOptions(initialCourseId, initialGender, initialTeeId);
 
 function setStatus(text, cls) {
     autosaveStatus.classList.remove('text-muted', 'text-success', 'text-danger');
@@ -612,6 +642,7 @@ function collectGolfPayload() {
         session_id: sessionId,
         course_id: parseInt(golfForm.querySelector('[name="course_id"]')?.value || '0', 10) || 0,
         tee_id: parseInt(golfForm.querySelector('[name="tee_id"]')?.value || '0', 10) || 0,
+        tee_gender: golfForm.querySelector('[name="tee_gender"]')?.value || 'men',
         course_name: (golfForm.querySelector('[name="course_name"]')?.value || '').trim(),
         num_holes: parseInt(golfForm.querySelector('[name="num_holes"]')?.value || '18', 10) || 18,
         game_type: golfForm.querySelector('[name="game_type"]')?.value || 'training',
