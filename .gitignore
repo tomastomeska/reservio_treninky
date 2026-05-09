@@ -3,6 +3,9 @@
 
 # Lokální konfigurace s citlivými údaji
 config/env.php
+config/env.local.php
+config/env.production.php
+config/env.staging.php
 
 # Uploadované soubory (nepatří do repozitáře)
 uploads/athletes/*

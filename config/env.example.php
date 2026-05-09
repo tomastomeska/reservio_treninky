@@ -1,24 +1,30 @@
 <?php
 // ============================================================
-// config/env.example.php – ŠABLONA pro lokální i produkční nasazení
-// Zkopírujte jako config/env.php a vyplňte skutečné údaje.
+// config/env.example.php - Sablona ENV profilu
+// Kopii ulozte jako config/env.local.php nebo config/env.production.php.
+// Aktivni profil je vzdy zkopirovan do config/env.php.
 // ============================================================
 
-// Databáze
-define('DB_HOST',    'localhost');        // nebo hostname od hostingu
+// Databaze
+define('DB_HOST',    'localhost');
 define('DB_NAME',    'nazev_databaze');
 define('DB_USER',    'uzivatel_db');
 define('DB_PASS',    'heslo_db');
 
-// Adresa aplikace
-// Příklady:
-//   define('BASE_URL', '');           // kořen domény: https://example.com/
-//   define('BASE_URL', '/trenerapp'); // podsložka:    https://example.com/trenerapp/
+// BASE_URL nechte prazdne pro automatickou detekci.
+// Pokud chcete vynutit podslozku, nastavte napr. '/trenerapp'.
 define('BASE_URL',   '');
 
-// true na produkci (HTTPS), false při lokálním vývoji
+// true na produkci (HTTPS), false lokalne.
 define('SESSION_SECURE', false);
 
-
-// Bezpecnostni pojistka setup_admin.php (na produkci ponechte false)
+// Bezpecnostni pojistka setup_admin.php (na produkci ponechte false).
 define('ENABLE_SETUP_ADMIN', false);
+
+// SMTP (volitelne)
+define('SMTP_HOST',      '');
+define('SMTP_PORT',      587);
+define('SMTP_USER',      '');
+define('SMTP_PASS',      '');
+define('SMTP_FROM',      'noreply@example.com');
+define('SMTP_FROM_NAME', 'TrainerApp');

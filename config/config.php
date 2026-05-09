@@ -13,7 +13,7 @@ unset($_envFile);
 
 // Zakladni nastaveni aplikace
 define('APP_NAME',     'TrainerApp');
-define('APP_VERSION',  '1.0.0');
+define('APP_VERSION',  '1.1.01');
 define('SESSION_NAME', 'trainerapp_sess');
 
 // E-mail odesilatele (prepisuje env.php, pokud je nastaven SMTP_FROM)
