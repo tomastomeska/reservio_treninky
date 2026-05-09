@@ -144,7 +144,7 @@ renderHeader('Golf - detail');
                     <small class="text-muted">Sada: <?= h($session['set_name']) ?></small>
                 </div>
 
-                <form method="post" novalidate>
+                <form method="post" novalidate id="golf-form">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="save">
 
@@ -253,11 +253,12 @@ renderHeader('Golf - detail');
                         </table>
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
                         <button type="submit" class="btn btn-success fw-bold">
                             <i class="fas fa-save me-1"></i>Uložit golf
                         </button>
                         <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-secondary">Zpět na trénink</a>
+                        <small id="golf-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
             </div>
@@ -332,6 +333,108 @@ renderHeader('Golf - detail');
 </div>
 
 <script>
+const golfForm = document.getElementById('golf-form');
+const autosaveStatus = document.getElementById('golf-autosave-status');
+const apiUrl = '<?= BASE_URL ?>/api/save_golf_draft.php';
+const sessionId = <?= (int)$sessionId ?>;
+
+let saveTimer = null;
+let saveInProgress = false;
+let pendingSave = false;
+let lastSavedHash = '';
+
+function setStatus(text, cls) {
+    autosaveStatus.classList.remove('text-muted', 'text-success', 'text-danger');
+    autosaveStatus.classList.add(cls);
+    autosaveStatus.textContent = text;
+}
+
+function collectGolfPayload() {
+    const payload = {
+        session_id: sessionId,
+        course_name: (golfForm.querySelector('[name="course_name"]')?.value || '').trim(),
+        num_holes: parseInt(golfForm.querySelector('[name="num_holes"]')?.value || '18', 10) || 18,
+        game_type: golfForm.querySelector('[name="game_type"]')?.value || 'training',
+        distance_km: golfForm.querySelector('[name="distance_km"]')?.value ?? '',
+        calories_burned: golfForm.querySelector('[name="calories_burned"]')?.value ?? '',
+        weather: (golfForm.querySelector('[name="weather"]')?.value || '').trim(),
+        players: (golfForm.querySelector('[name="players"]')?.value || '').trim(),
+        handicap_after: golfForm.querySelector('[name="handicap_after"]')?.value ?? '',
+        duration_minutes: golfForm.querySelector('[name="duration_minutes"]')?.value ?? '',
+        feeling: (golfForm.querySelector('[name="feeling"]')?.value || '').trim(),
+        holes: []
+    };
+
+    const holeNumbers = golfForm.querySelectorAll('[name="hole_number[]"]');
+    const holePars = golfForm.querySelectorAll('[name="hole_par[]"]');
+    const holeScores = golfForm.querySelectorAll('[name="hole_score[]"]');
+    const holeNotes = golfForm.querySelectorAll('[name="hole_notes[]"]');
+
+    for (let i = 0; i < holeNumbers.length; i++) {
+        payload.holes.push({
+            hole_number: holeNumbers[i]?.value || '',
+            par: holePars[i]?.value || '',
+            score: holeScores[i]?.value || '',
+            notes: (holeNotes[i]?.value || '').trim()
+        });
+    }
+
+    return payload;
+}
+
+async function saveGolfDraft(immediate = false) {
+    if (!immediate && saveInProgress) {
+        pendingSave = true;
+        return;
+    }
+
+    const payload = collectGolfPayload();
+    const hash = JSON.stringify(payload);
+    if (!immediate && hash === lastSavedHash) {
+        return;
+    }
+
+    if (saveInProgress) {
+        pendingSave = true;
+        return;
+    }
+
+    saveInProgress = true;
+    setStatus('Ukládám...', 'text-muted');
+
+    try {
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Uložení se nezdařilo');
+        }
+        lastSavedHash = hash;
+        setStatus('Uloženo ' + (data.saved_at || ''), 'text-success');
+    } catch (err) {
+        setStatus('Neuloženo - zkontrolujte připojení', 'text-danger');
+    } finally {
+        saveInProgress = false;
+        if (pendingSave) {
+            pendingSave = false;
+            saveGolfDraft(false);
+        }
+    }
+}
+
+function scheduleGolfAutosave() {
+    setStatus('Neuložené změny', 'text-muted');
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+    }
+    saveTimer = setTimeout(function() {
+        saveGolfDraft(false);
+    }, 700);
+}
+
 document.getElementById('num_holes').addEventListener('change', function() {
     const target = parseInt(this.value || '18', 10);
     if (target <= 0 || target > 36) {
@@ -366,6 +469,33 @@ document.getElementById('num_holes').addEventListener('change', function() {
             '<td><input type="text" class="form-control form-control-sm" name="hole_notes[]" value="' + data.notes.replace(/"/g, '&quot;') + '"></td>';
         tbody.appendChild(tr);
     }
+
+    scheduleGolfAutosave();
+});
+
+golfForm.addEventListener('input', function(e) {
+    if (!e.target || e.target.type === 'hidden') {
+        return;
+    }
+    scheduleGolfAutosave();
+});
+
+golfForm.addEventListener('change', function(e) {
+    if (!e.target || e.target.type === 'hidden') {
+        return;
+    }
+    scheduleGolfAutosave();
+});
+
+golfForm.addEventListener('submit', function() {
+    setStatus('Ukládám...', 'text-muted');
+});
+
+window.addEventListener('beforeunload', function() {
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+    }
+    saveGolfDraft(true);
 });
 </script>
 
