@@ -6,10 +6,7 @@
 -- 1. Přidat sloupec sport_type do exercises
 ALTER TABLE `exercises` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_outdoor', 'run_treadmill') NOT NULL DEFAULT 'standard' AFTER `is_global`;
 
--- 2. Přidat sloupec sport_type do workout_sets
-ALTER TABLE `workout_sets` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_outdoor', 'run_treadmill') NOT NULL DEFAULT 'standard' AFTER `name`;
-
--- 3. Přidat sloupec sport_type do training_sessions (odvozeno z workout_setu)
+-- 2. Přidat sloupec sport_type do training_sessions (odvozeno z prvního cviku v sadě)
 ALTER TABLE `training_sessions` ADD COLUMN `sport_type` ENUM('standard', 'golf', 'run_outdoor', 'run_treadmill') NOT NULL DEFAULT 'standard' AFTER `paired_session_id`;
 
 -- ============================================================

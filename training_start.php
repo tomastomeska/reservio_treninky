@@ -24,14 +24,26 @@ if (!$stmt->fetch()) {
 }
 
 // Ověření sady
-$stmt = $pdo->prepare('SELECT id, sport_type FROM workout_sets WHERE id = ? AND coach_id = ?');
+$stmt = $pdo->prepare('SELECT id FROM workout_sets WHERE id = ? AND coach_id = ?');
 $stmt->execute([$workoutSetId, $coachId]);
 $workoutSet = $stmt->fetch();
 if (!$workoutSet) {
     flash('danger', 'Sada nenalezena.');
     redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
 }
-$sportType = $workoutSet['sport_type'] ?? 'standard';
+
+// Určení sport_type z prvního cviku v sadě
+$stmt = $pdo->prepare(
+    'SELECT e.sport_type
+     FROM workout_set_exercises wse
+     JOIN exercises e ON e.id = wse.exercise_id
+     WHERE wse.workout_set_id = ?
+     ORDER BY wse.exercise_order ASC
+     LIMIT 1'
+);
+$stmt->execute([$workoutSetId]);
+$firstExercise = $stmt->fetch();
+$sportType = $firstExercise['sport_type'] ?? 'standard';
 
 // Zkontroluj, zda neexistuje nedokončená session pro tohoto sportovce
 $stmt = $pdo->prepare(
