@@ -84,10 +84,11 @@ if (!defined('BASE_URL')) {
 
 // SESSION_SECURE: automaticka detekce HTTPS (env.php muze prepsat)
 if (!defined('SESSION_SECURE')) {
-    define('SESSION_SECURE',
+    define(
+        'SESSION_SECURE',
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-        (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
-        (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+            (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+            (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
     );
 }
 // ENABLE_SETUP_ADMIN: bezpecnostni pojistka pro setup_admin.php
