@@ -7,6 +7,9 @@ config/env.local.php
 config/env.production.php
 config/env.staging.php
 
+# Produkcni SQL dumpy s realnymi daty
+sql/d391857_tplan.sql
+
 # Uploadované soubory (nepatří do repozitáře)
 uploads/athletes/*
 uploads/exercises/*

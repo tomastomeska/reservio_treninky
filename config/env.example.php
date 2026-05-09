@@ -11,9 +11,9 @@ define('DB_NAME',    'nazev_databaze');
 define('DB_USER',    'uzivatel_db');
 define('DB_PASS',    'heslo_db');
 
-// BASE_URL nechte prazdne pro automatickou detekci.
-// Pokud chcete vynutit podslozku, nastavte napr. '/trenerapp'.
-define('BASE_URL',   '');
+// BASE_URL standardne NENASTAVUJTE, aby bezela automaticka detekce.
+// Pokud chcete vynutit podslozku, odkomentujte nasledujici radek:
+// define('BASE_URL', '/trenerapp');
 
 // true na produkci (HTTPS), false lokalne.
 define('SESSION_SECURE', false);
