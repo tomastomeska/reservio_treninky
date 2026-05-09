@@ -276,3 +276,111 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 }
+
+// ============================================================
+// Speciální sporty – Běh na páse
+// ============================================================
+
+/**
+ * Vytvoří záznam běhu na páse po startu tréninku
+ */
+function createRunTreadmillSession(int $sessionId, int $durationSeconds, float $distanceKm): int {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('
+        INSERT INTO `run_treadmill_sessions`
+            (`session_id`, `duration_seconds`, `distance_km`, `started_at`, `created_at`)
+        VALUES (?, ?, ?, NOW(), NOW())
+    ');
+    $stmt->execute([$sessionId, $durationSeconds, $distanceKm]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Aktualizuje běh na páse (po ukončení, v detailu)
+ */
+function updateRunTreadmillSession(int $runSessionId, int $durationSeconds, float $distanceKm, ?int $caloriesBurned = null, ?string $location = null, ?string $feeling = null): bool {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('
+        UPDATE `run_treadmill_sessions`
+        SET `duration_seconds` = ?,
+            `distance_km` = ?,
+            `calories_burned` = ?,
+            `location` = ?,
+            `feeling` = ?,
+            `ended_at` = NOW(),
+            `updated_at` = NOW()
+        WHERE `id` = ?
+    ');
+    $stmt->execute([$durationSeconds, $distanceKm, $caloriesBurned, $location, $feeling, $runSessionId]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Načte běh na páse z session_id
+ */
+function getRunTreadmillSessionByTrainingSession(int $sessionId): ?array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('SELECT * FROM `run_treadmill_sessions` WHERE `session_id` = ?');
+    $stmt->execute([$sessionId]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Načte běh na páse z ID běhu
+ */
+function getRunTreadmillSession(int $runSessionId): ?array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('SELECT * FROM `run_treadmill_sessions` WHERE `id` = ?');
+    $stmt->execute([$runSessionId]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Vrátí poslední běhy na páse pro sportovce
+ */
+function getRunTreadmillHistory(int $athleteId, int $limit = 10): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('
+        SELECT rts.*, ts.completed_at, ts.started_at as ts_started_at
+        FROM `run_treadmill_sessions` rts
+        JOIN `training_sessions` ts ON ts.id = rts.session_id
+        WHERE ts.athlete_id = ? AND ts.completed_at IS NOT NULL
+        ORDER BY ts.completed_at DESC
+        LIMIT ?
+    ');
+    $stmt->execute([$athleteId, $limit]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Vypočítá statistiky běhu na páse (průměr, totál)
+ */
+function calculateRunTreadmillStats(int $athleteId, int $daysBack = 30): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare('
+        SELECT 
+            COUNT(*) as total_runs,
+            SUM(rts.distance_km) as total_km,
+            AVG(rts.distance_km) as avg_km,
+            SUM(rts.calories_burned) as total_calories,
+            SUM(rts.duration_seconds) as total_seconds
+        FROM `run_treadmill_sessions` rts
+        JOIN `training_sessions` ts ON ts.id = rts.session_id
+        WHERE ts.athlete_id = ? 
+            AND ts.completed_at IS NOT NULL
+            AND ts.completed_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    ');
+    $stmt->execute([$athleteId, $daysBack]);
+    $row = $stmt->fetch();
+    
+    return [
+        'total_runs'      => (int)($row['total_runs'] ?? 0),
+        'total_km'        => (float)($row['total_km'] ?? 0),
+        'avg_km'          => (float)($row['avg_km'] ?? 0),
+        'total_calories'  => (int)($row['total_calories'] ?? 0),
+        'total_seconds'   => (int)($row['total_seconds'] ?? 0),
+        'avg_pace_seconds' => $row['total_seconds'] > 0 && $row['total_km'] > 0 
+            ? (int)($row['total_seconds'] / $row['total_km']) 
+            : 0,
+    ];
+}

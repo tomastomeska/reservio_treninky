@@ -15,12 +15,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = 'Neplatný bezpečnostní token.';
     } else {
         $name = trim($_POST['name'] ?? '');
+        $sportType = $_POST['sport_type'] ?? 'standard';
         if ($name === '') {
             $error = 'Zadejte název cviku.';
         } else {
             $photo = saveUploadedPhoto('photo', 'exercises');
-            $pdo->prepare('INSERT INTO exercises (coach_id, name, photo) VALUES (?, ?, ?)')
-                ->execute([$coachId, $name, $photo]);
+            $pdo->prepare('INSERT INTO exercises (coach_id, name, photo, sport_type) VALUES (?, ?, ?, ?)')
+                ->execute([$coachId, $name, $photo, $sportType]);
             flash('success', "Cvik \"$name\" byl přidán.");
             redirect(BASE_URL . '/exercises.php');
         }
@@ -59,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } else {
         $exId    = intParam($_POST, 'exercise_id');
         $newName = trim($_POST['new_name'] ?? '');
+        $sportType = $_POST['sport_type'] ?? 'standard';
         if ($newName === '') {
             $error = 'Zadejte název cviku.';
         } else {
@@ -69,11 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $stmtOld->execute([$exId, $coachId]);
                 $oldRow = $stmtOld->fetch();
                 if ($oldRow) deleteUploadedPhoto($oldRow['photo'], 'exercises');
-                $pdo->prepare('UPDATE exercises SET name = ?, photo = ? WHERE id = ? AND coach_id = ?')
-                    ->execute([$newName, $newPhoto, $exId, $coachId]);
+                $pdo->prepare('UPDATE exercises SET name = ?, photo = ?, sport_type = ? WHERE id = ? AND coach_id = ?')
+                    ->execute([$newName, $newPhoto, $sportType, $exId, $coachId]);
             } else {
-                $pdo->prepare('UPDATE exercises SET name = ? WHERE id = ? AND coach_id = ?')
-                    ->execute([$newName, $exId, $coachId]);
+                $pdo->prepare('UPDATE exercises SET name = ?, sport_type = ? WHERE id = ? AND coach_id = ?')
+                    ->execute([$newName, $sportType, $exId, $coachId]);
             }
             flash('success', 'Cvik byl upraven.');
             redirect(BASE_URL . '/exercises.php');
@@ -132,6 +134,15 @@ renderHeader('Cviky');
                                required autofocus>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Typ cviku</label>
+                        <select name="sport_type" class="form-select">
+                            <option value="standard" selected>Standardní cvik (váha, opakování)</option>
+                            <option value="golf">Golf (jamky, par)</option>
+                            <option value="run_outdoor">Běh venku (tempo, splity)</option>
+                            <option value="run_treadmill">Běh na páse (čas, km)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Fotografie <span class="text-muted fw-normal">(nepovinné)</span></label>
                         <input type="file" name="photo" class="form-control" accept="image/*">
                     </div>
@@ -175,6 +186,16 @@ renderHeader('Cviky');
                         </div>
                         <div class="flex-grow-1">
                             <span class="exercise-name fw-semibold"><?= h($ex['name']) ?></span>
+                            <?php
+                                $typeLabels = [
+                                    'standard' => ['label' => 'Cvik', 'color' => 'secondary'],
+                                    'golf' => ['label' => 'Golf', 'color' => 'info'],
+                                    'run_outdoor' => ['label' => 'Běh venku', 'color' => 'success'],
+                                    'run_treadmill' => ['label' => 'Běh na páse', 'color' => 'primary'],
+                                ];
+                                $typeInfo = $typeLabels[$ex['sport_type']] ?? $typeLabels['standard'];
+                            ?>
+                            <span class="badge bg-<?= $typeInfo['color'] ?> ms-2 small"><?= $typeInfo['label'] ?></span>
                             <span class="exercise-edit d-none">
                                 <form method="post" enctype="multipart/form-data"
                                       class="d-flex flex-wrap gap-2 align-items-center mt-1">
@@ -183,6 +204,12 @@ renderHeader('Cviky');
                                     <input type="hidden" name="exercise_id" value="<?= $ex['id'] ?>">
                                     <input type="text" name="new_name" class="form-control form-control-sm"
                                            value="<?= h($ex['name']) ?>" style="min-width:180px">
+                                    <select name="sport_type" class="form-select form-select-sm" style="max-width:200px">
+                                        <option value="standard" <?= $ex['sport_type'] === 'standard' ? 'selected' : '' ?>>Standardní</option>
+                                        <option value="golf" <?= $ex['sport_type'] === 'golf' ? 'selected' : '' ?>>Golf</option>
+                                        <option value="run_outdoor" <?= $ex['sport_type'] === 'run_outdoor' ? 'selected' : '' ?>>Běh venku</option>
+                                        <option value="run_treadmill" <?= $ex['sport_type'] === 'run_treadmill' ? 'selected' : '' ?>>Běh na páse</option>
+                                    </select>
                                     <input type="file" name="photo" class="form-control form-control-sm"
                                            accept="image/*" style="max-width:100%;flex:1;min-width:0"
                                            title="Změnit fotografii (nepovinné)">
