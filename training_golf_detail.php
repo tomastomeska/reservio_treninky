@@ -79,7 +79,7 @@ $savedProjection = calculateGolfHandicapProjection(
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
     if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
-        flash('danger', 'Neplatn├Ż bezpe─Źnostn├ş token.');
+        flash('danger', 'Neplatný bezpečnostní token.');
         redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
     }
 
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     }
 
     if ($handicapBefore === null && $defaultStartingHandicap === null) {
-        flash('danger', 'Prvn├ş golf vy┼żaduje zadat startovn├ş HCP.');
+        flash('danger', 'První golf vyžaduje zadat startovní HCP.');
         redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
     }
 
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     }
 
     if ($courseRating === null || $slopeRating === null) {
-        flash('danger', 'Vyberte odpali┼ít─Ť nebo dopl┼łte course/slope rating.');
+        flash('danger', 'Vyberte odpaliště nebo doplňte course/slope rating.');
         redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
     }
 
@@ -202,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
 
     saveGolfHoles((int)$golfSession['id'], $holes);
 
-    flash('success', 'Golf byl ulo┼żen.');
+    flash('success', 'Golf byl uložen.');
     redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
 }
 
@@ -250,9 +250,9 @@ renderHeader('Golf - detail');
                     <div class="row g-3">
                         <div class="col-12 col-lg-6">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">H┼Öi┼ít─Ť</label>
+                                <label class="form-label fw-semibold">Hřiště</label>
                                 <select class="form-select form-select-lg" name="course_id" id="golf-course-id">
-                                    <option value="0">Ru─Źn├ş zad├ín├ş</option>
+                                    <option value="0">Ruční zadání</option>
                                     <?php foreach ($golfCourses as $course): ?>
                                     <option value="<?= (int)$course['id'] ?>" <?= $selectedCourseId === (int)$course['id'] ? 'selected' : '' ?>>
                                         <?= h((string)$course['name']) ?><?= !empty($course['location']) ? ' - ' . h((string)$course['location']) : '' ?>
@@ -260,32 +260,32 @@ renderHeader('Golf - detail');
                                     <?php endforeach; ?>
                                 </select>
                                 <input type="text" class="form-control mt-2" name="course_name" id="golf-course-name"
-                                       value="<?= h((string)$golfSession['course_name']) ?>" placeholder="nap┼Ö. Albatross">
-                                <small class="text-muted">Vyber h┼Öi┼ít─Ť z datab├íze, nebo zadej ru─Źn─Ť.</small>
+                                        value="<?= h((string)$golfSession['course_name']) ?>" placeholder="např. Albatross">
+                                    <small class="text-muted">Vyber hřiště z databáze, nebo zadej ručně.</small>
                             </div>
                         </div>
                         <div class="col-6 col-lg-2">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Pohlav├ş</label>
+                                <label class="form-label fw-semibold">Pohlaví</label>
                                 <select class="form-select form-select-lg" name="tee_gender" id="golf-tee-gender">
-                                    <option value="men" <?= $selectedGender === 'men' ? 'selected' : '' ?>>Mu┼żi</option>
-                                    <option value="women" <?= $selectedGender === 'women' ? 'selected' : '' ?>>┼Żeny</option>
+                                    <option value="men" <?= $selectedGender === 'men' ? 'selected' : '' ?>>Muži</option>
+                                    <option value="women" <?= $selectedGender === 'women' ? 'selected' : '' ?>>Ženy</option>
                                     <option value="unisex" <?= $selectedGender === 'unisex' ? 'selected' : '' ?>>Unisex</option>
                                 </select>
-                                <small class="text-muted">Podle pohlav├ş se filtruj├ş odpali┼ít─Ť.</small>
+                                <small class="text-muted">Podle pohlaví se filtrují odpaliště.</small>
                             </div>
                         </div>
                         <div class="col-6 col-lg-2">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Odpali┼ít─Ť</label>
+                                <label class="form-label fw-semibold">Odpaliště</label>
                                 <select class="form-select form-select-lg" name="tee_id" id="golf-tee-id">
-                                    <option value="0">Bez odpali┼ít─Ť</option>
+                                    <option value="0">Bez odpaliště</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-6 col-lg-2">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Po─Źet jamek</label>
+                                <label class="form-label fw-semibold">Počet jamek</label>
                                 <input type="number" class="form-control form-control-lg" name="num_holes" id="num_holes"
                                        min="1" max="36" value="<?= $numHolesForForm ?>">
                             </div>
@@ -297,8 +297,8 @@ renderHeader('Golf - detail');
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Typ hry</label>
                                 <select class="form-select form-select-lg" name="game_type">
-                                    <option value="training" <?= $golfSession['game_type'] === 'training' ? 'selected' : '' ?>>Tr├ęnink</option>
-                                    <option value="friendly" <?= $golfSession['game_type'] === 'friendly' ? 'selected' : '' ?>>P┼Ö├ítelsk├ę</option>
+                                    <option value="training" <?= $golfSession['game_type'] === 'training' ? 'selected' : '' ?>>Trénink</option>
+                                    <option value="friendly" <?= $golfSession['game_type'] === 'friendly' ? 'selected' : '' ?>>Přátelské</option>
                                     <option value="tournament" <?= $golfSession['game_type'] === 'tournament' ? 'selected' : '' ?>>Turnaj</option>
                                 </select>
                             </div>
@@ -308,7 +308,7 @@ renderHeader('Golf - detail');
                                 <label class="form-label fw-semibold">Course rating</label>
                                 <input type="number" class="form-control form-control-lg" step="0.1" min="0" name="course_rating" id="golf-course-rating"
                                        value="<?= h((string)$courseRating) ?>"
-                                       placeholder="nap┼Ö. 72.0">
+                                       placeholder="např. 72.0">
                             </div>
                         </div>
                         <div class="col-12 col-md-4">
@@ -316,7 +316,7 @@ renderHeader('Golf - detail');
                                 <label class="form-label fw-semibold">Slope rating</label>
                                 <input type="number" class="form-control form-control-lg" min="1" name="slope_rating" id="golf-slope-rating"
                                        value="<?= h((string)$slopeRating) ?>"
-                                       placeholder="nap┼Ö. 113">
+                                       placeholder="např. 113">
                             </div>
                         </div>
                     </div>
@@ -324,22 +324,22 @@ renderHeader('Golf - detail');
                     <div class="row g-3">
                         <div class="col-12 col-md-4">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Startovn├ş HCP</label>
+                                <label class="form-label fw-semibold">Startovní HCP</label>
                                 <input type="number" class="form-control form-control-lg" step="0.1" min="0" name="handicap_before"
                                        value="<?= h((string)($handicapBefore ?? '')) ?>"
-                                        placeholder="<?= $defaultStartingHandicap !== null ? h(number_format((float)$defaultStartingHandicap, 1, '.', '')) : 'nap┼Ö. 18.4' ?>"
+                                    placeholder="<?= $defaultStartingHandicap !== null ? h(number_format((float)$defaultStartingHandicap, 1, '.', '')) : 'např. 18.4' ?>"
                                         <?= $defaultStartingHandicap === null ? 'required' : '' ?>>
                                 <?php if ($defaultStartingHandicap === null): ?>
-                                <small class="text-muted">Prvn├ş golf: zadej vstupn├ş HCP.</small>
+                                <small class="text-muted">První golf: zadej vstupní HCP.</small>
                                 <?php else: ?>
-                                <small class="text-muted">Dal┼í├ş kolo navazuje na posledn├ş ulo┼żen├ę HCP.</small>
+                                <small class="text-muted">Další kolo navazuje na poslední uložené HCP.</small>
                                 <?php endif; ?>
                             </div>
                         </div>
                         <div class="col-12 col-md-4">
                             <div class="mb-3 d-flex flex-column justify-content-end h-100">
                                 <div class="alert alert-light border mb-0 py-2 small golf-inline-note">
-                                    CR/SR se p┼Öi v├Żb─Ťru odpali┼ít─Ť na─Źte automaticky.
+                                    CR/SR se při výběru odpaliště načte automaticky.
                                 </div>
                             </div>
                         </div>
@@ -348,7 +348,7 @@ renderHeader('Golf - detail');
                                 <label class="form-label fw-semibold">Do HCP</label>
                                 <div class="form-check form-switch form-switch-lg mt-1">
                                     <input class="form-check-input" type="checkbox" role="switch" id="count_for_handicap" name="count_for_handicap" <?= $countForHandicap ? 'checked' : '' ?>>
-                                    <label class="form-check-label" for="count_for_handicap">Zapo─Ź├ştat toto kolo</label>
+                                    <label class="form-check-label" for="count_for_handicap">Započítat toto kolo</label>
                                 </div>
                             </div>
                         </div>
@@ -378,30 +378,30 @@ renderHeader('Golf - detail');
                         </div>
                         <div class="col-6 col-md-2">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">V├Żsledn├ę HCP</label>
+                                    <label class="form-label fw-semibold">Výsledné HCP</label>
                                 <input type="number" class="form-control form-control-lg" step="0.1" readonly id="golf-handicap-after"
                                        value="<?= h((string)($golfSession['handicap_after'] ?? $savedProjection['handicap_after'] ?? '')) ?>">
-                                <small class="text-muted">Po ulo┼żen├ş se dopo─Ź├şt├í automaticky.</small>
+                                    <small class="text-muted">Po uložení se dopočítá automaticky.</small>
                             </div>
                         </div>
                         <div class="col-12 col-md-4">
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Po─Źas├ş</label>
+                                    <label class="form-label fw-semibold">Počasí</label>
                                 <input type="text" class="form-control" name="weather"
-                                       value="<?= h((string)($golfSession['weather'] ?? '')) ?>" placeholder="slune─Źno, v├ştr...">
+                                        value="<?= h((string)($golfSession['weather'] ?? '')) ?>" placeholder="slunečno, vítr...">
                             </div>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Spoluhr├í─Źi</label>
+                           <label class="form-label fw-semibold">Spoluhráči</label>
                         <input type="text" class="form-control" name="players"
-                               value="<?= h((string)($golfSession['players'] ?? '')) ?>" placeholder="Jm├ęna odd─Ťlen├í ─Ź├írkou">
+                               value="<?= h((string)($golfSession['players'] ?? '')) ?>" placeholder="Jména oddělená čárkou">
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Pocit / pozn├ímka</label>
-                        <textarea class="form-control" name="feeling" rows="2" placeholder="Shrnut├ş kola..."><?= h((string)($golfSession['feeling'] ?? '')) ?></textarea>
+                        <label class="form-label fw-semibold">Pocit / poznámka</label>
+                        <textarea class="form-control" name="feeling" rows="2" placeholder="Shrnutí kola..."><?= h((string)($golfSession['feeling'] ?? '')) ?></textarea>
                     </div>
 
                     <hr>
@@ -412,8 +412,8 @@ renderHeader('Golf - detail');
                                 <tr>
                                     <th>Jamka</th>
                                     <th>Par</th>
-                                    <th>Sk├│re</th>
-                                    <th>Pozn├ímka</th>
+                                    <th>Skóre</th>
+                                    <th>Poznámka</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -435,33 +435,33 @@ renderHeader('Golf - detail');
 
                     <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center">
                         <button type="submit" class="btn btn-success btn-lg fw-bold">
-                            <i class="fas fa-save me-1"></i>Ulo┼żit golf
+                            <i class="fas fa-save me-1"></i>Uložit golf
                         </button>
-                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-outline-secondary btn-lg">Zp─Ťt na tr├ęnink</a>
-                        <small id="golf-autosave-status" class="text-muted ms-0 ms-sm-2 align-self-center">Automatick├ę ukl├íd├ín├ş zapnuto</small>
+                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-outline-secondary btn-lg">Zpět na trénink</a>
+                        <small id="golf-autosave-status" class="text-muted ms-0 ms-sm-2 align-self-center">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
 
                 <div class="row g-3 mt-1">
                     <div class="col-md-4">
                         <div class="alert alert-light border mb-0">
-                            <div class="small text-muted">HCP p┼Öed hrou</div>
-                            <div class="fw-bold fs-5" id="golf-hcp-before-value"><?= $savedProjection['handicap_before'] !== null ? number_format((float)$savedProjection['handicap_before'], 1, ',', ' ') : 'ÔÇô' ?></div>
+                            <div class="small text-muted">HCP před hrou</div>
+                            <div class="fw-bold fs-5" id="golf-hcp-before-value"><?= $savedProjection['handicap_before'] !== null ? number_format((float)$savedProjection['handicap_before'], 1, ',', ' ') : '–' ?></div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="alert alert-light border mb-0">
                             <div class="small text-muted">Score differential</div>
-                            <div class="fw-bold fs-5" id="golf-score-diff-value"><?= $savedProjection['score_differential'] !== null ? number_format((float)$savedProjection['score_differential'], 1, ',', ' ') : 'ÔÇô' ?></div>
+                            <div class="fw-bold fs-5" id="golf-score-diff-value"><?= $savedProjection['score_differential'] !== null ? number_format((float)$savedProjection['score_differential'], 1, ',', ' ') : '–' ?></div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="alert alert-light border mb-0">
-                            <div class="small text-muted">V├Żsledn├ę HCP</div>
+                            <div class="small text-muted">Výsledné HCP</div>
                             <div class="fw-bold fs-5" id="golf-hcp-after-value">
-                                <?= $savedProjection['handicap_after'] !== null ? number_format((float)$savedProjection['handicap_after'], 1, ',', ' ') : 'ÔÇô' ?>
+                                <?= $savedProjection['handicap_after'] !== null ? number_format((float)$savedProjection['handicap_after'], 1, ',', ' ') : '–' ?>
                                 <span class="badge bg-secondary ms-1" id="golf-hcp-count-badge">
-                                    <?= $countForHandicap ? 'po─Ź├şt├í se' : 'jen informativn─Ť' ?>
+                                    <?= $countForHandicap ? 'počítá se' : 'jen informativně' ?>
                                 </span>
                             </div>
                         </div>
@@ -472,20 +472,20 @@ renderHeader('Golf - detail');
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-dark text-white fw-bold">
-                <i class="fas fa-history me-2"></i>Posledn├ş kola
+                <i class="fas fa-history me-2"></i>Poslední kola
             </div>
             <div class="card-body p-0">
                 <?php if (empty($history)): ?>
-                <div class="text-center py-4 text-muted">┼Ż├ídn├í historie.</div>
+                <div class="text-center py-4 text-muted">Žádná historie.</div>
                 <?php else: ?>
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>Datum</th>
-                            <th>H┼Öi┼ít─Ť</th>
-                            <th>Sk├│re</th>
+                            <th>Hřiště</th>
+                            <th>Skóre</th>
                             <th>Par</th>
-                            <th>HCP p┼Öed</th>
+                            <th>HCP před</th>
                             <th>HCP po</th>
                             <th>Do HCP</th>
                         </tr>
@@ -497,8 +497,8 @@ renderHeader('Golf - detail');
                             <td><?= h((string)$round['course_name']) ?></td>
                             <td><?= (int)$round['total_score'] ?></td>
                             <td><?= (int)$round['total_par'] ?></td>
-                            <td><?= $round['handicap_before'] !== null ? number_format((float)$round['handicap_before'], 1, ',', ' ') : 'ÔÇô' ?></td>
-                            <td><?= $round['handicap_after'] !== null ? number_format((float)$round['handicap_after'], 1, ',', ' ') : 'ÔÇô' ?></td>
+                            <td><?= $round['handicap_before'] !== null ? number_format((float)$round['handicap_before'], 1, ',', ' ') : '–' ?></td>
+                            <td><?= $round['handicap_after'] !== null ? number_format((float)$round['handicap_after'], 1, ',', ' ') : '–' ?></td>
                             <td>
                                 <?php if ((int)($round['count_for_handicap'] ?? 1) === 1): ?>
                                 <span class="badge bg-success">Ano</span>
@@ -516,7 +516,7 @@ renderHeader('Golf - detail');
 
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-info text-white fw-bold">
-                <i class="fas fa-chart-line me-2"></i>Statistiky (90 dn├ş)
+                <i class="fas fa-chart-line me-2"></i>Statistiky (90 dní)
             </div>
             <div class="card-body">
                 <div class="row text-center">
@@ -525,8 +525,8 @@ renderHeader('Golf - detail');
                         <small class="text-muted">Kol</small>
                     </div>
                     <div class="col-md-2">
-                        <strong><?= $stats['avg_handicap'] !== null ? number_format((float)$stats['avg_handicap'], 1, ',', ' ') : 'ÔÇô' ?></strong><br>
-                        <small class="text-muted">Pr┼»m. HCP</small>
+                        <strong><?= $stats['avg_handicap'] !== null ? number_format((float)$stats['avg_handicap'], 1, ',', ' ') : '–' ?></strong><br>
+                        <small class="text-muted">Prům. HCP</small>
                     </div>
                     <div class="col-md-2">
                         <strong><?= number_format((float)$stats['total_km'], 1, ',', ' ') ?> km</strong><br>
@@ -538,7 +538,7 @@ renderHeader('Golf - detail');
                     </div>
                     <div class="col-md-2">
                         <strong><?= (int)$stats['total_score'] ?></strong><br>
-                        <small class="text-muted">Sk├│re</small>
+                        <small class="text-muted">Skóre</small>
                     </div>
                     <div class="col-md-2">
                         <strong><?= (int)$stats['total_par'] ?></strong><br>
@@ -575,7 +575,7 @@ function rebuildTeeOptions(courseId, gender = 'men', teeId = 0) {
     teeSelect.innerHTML = '';
     const emptyOpt = document.createElement('option');
     emptyOpt.value = '0';
-    emptyOpt.textContent = 'Bez odpali┼ít─Ť';
+    emptyOpt.textContent = 'Bez odpaliště';
     teeSelect.appendChild(emptyOpt);
 
     const list = (teesByCourse[String(courseId)] || []).filter(function(tee) {
@@ -584,7 +584,7 @@ function rebuildTeeOptions(courseId, gender = 'men', teeId = 0) {
     list.forEach(function(tee) {
         const opt = document.createElement('option');
         opt.value = String(tee.id);
-        opt.textContent = tee.tee_name + ' - ' + (tee.gender === 'men' ? 'mu┼żi' : tee.gender === 'women' ? '┼żeny' : 'unisex') + ' - CR ' + tee.course_rating + ' / SR ' + tee.slope_rating;
+        opt.textContent = tee.tee_name + ' - ' + (tee.gender === 'men' ? 'muži' : tee.gender === 'women' ? 'ženy' : 'unisex') + ' - CR ' + tee.course_rating + ' / SR ' + tee.slope_rating;
         if (parseInt(tee.id, 10) === parseInt(teeId, 10)) {
             opt.selected = true;
             if (courseRatingInput) courseRatingInput.value = tee.course_rating;
@@ -701,7 +701,7 @@ async function saveGolfDraft(immediate = false) {
     }
 
     saveInProgress = true;
-    setStatus('Ukl├íd├ím...', 'text-muted');
+    setStatus('Ukládám...', 'text-muted');
 
     try {
         const resp = await fetch(apiUrl, {
@@ -711,34 +711,34 @@ async function saveGolfDraft(immediate = false) {
         });
         const data = await resp.json();
         if (!data.success) {
-            throw new Error(data.error || 'Ulo┼żen├ş se nezda┼Öilo');
+            throw new Error(data.error || 'Uložení se nezdařilo');
         }
         lastSavedHash = hash;
-        setStatus('Ulo┼żeno ' + (data.saved_at || ''), 'text-success');
+        setStatus('Uloženo ' + (data.saved_at || ''), 'text-success');
         const handicapAfterInput = document.getElementById('golf-handicap-after');
         const handicapBeforeValue = document.getElementById('golf-hcp-before-value');
         const scoreDiffValue = document.getElementById('golf-score-diff-value');
         const handicapAfterValue = document.getElementById('golf-hcp-after-value');
         const countBadge = document.getElementById('golf-hcp-count-badge');
         if (handicapBeforeValue && data.handicap_before !== undefined) {
-            handicapBeforeValue.textContent = data.handicap_before !== null ? Number(data.handicap_before).toFixed(1).replace('.', ',') : 'ÔÇô';
+            handicapBeforeValue.textContent = data.handicap_before !== null ? Number(data.handicap_before).toFixed(1).replace('.', ',') : '–';
         }
         if (scoreDiffValue && data.score_differential !== undefined) {
-            scoreDiffValue.textContent = data.score_differential !== null ? Number(data.score_differential).toFixed(1).replace('.', ',') : 'ÔÇô';
+            scoreDiffValue.textContent = data.score_differential !== null ? Number(data.score_differential).toFixed(1).replace('.', ',') : '–';
         }
         if (handicapAfterInput && data.handicap_after !== undefined) {
             handicapAfterInput.value = data.handicap_after !== null ? Number(data.handicap_after).toFixed(1) : '';
         }
         if (handicapAfterValue && data.handicap_after !== undefined) {
             if (handicapAfterValue.firstChild && handicapAfterValue.firstChild.nodeType === Node.TEXT_NODE) {
-                handicapAfterValue.firstChild.nodeValue = data.handicap_after !== null ? Number(data.handicap_after).toFixed(1).replace('.', ',') + ' ' : 'ÔÇô ';
+                handicapAfterValue.firstChild.nodeValue = data.handicap_after !== null ? Number(data.handicap_after).toFixed(1).replace('.', ',') + ' ' : '– ';
             }
             if (countBadge) {
-                countBadge.textContent = data.count_for_handicap ? 'po─Ź├şt├í se' : 'jen informativn─Ť';
+                countBadge.textContent = data.count_for_handicap ? 'počítá se' : 'jen informativně';
             }
         }
     } catch (err) {
-        setStatus('Neulo┼żeno - zkontrolujte p┼Öipojen├ş', 'text-danger');
+        setStatus('Neuloženo - zkontrolujte připojení', 'text-danger');
     } finally {
         saveInProgress = false;
         if (pendingSave) {
@@ -749,7 +749,7 @@ async function saveGolfDraft(immediate = false) {
 }
 
 function scheduleGolfAutosave() {
-    setStatus('Neulo┼żen├ę zm─Ťny', 'text-muted');
+    setStatus('Neuložené změny', 'text-muted');
     if (saveTimer) {
         clearTimeout(saveTimer);
     }
@@ -811,7 +811,7 @@ golfForm.addEventListener('change', function(e) {
 });
 
 golfForm.addEventListener('submit', function() {
-    setStatus('Ukl├íd├ím...', 'text-muted');
+    setStatus('Ukládám...', 'text-muted');
 });
 
 window.addEventListener('beforeunload', function() {

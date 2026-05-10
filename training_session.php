@@ -110,7 +110,7 @@ renderHeader('Aktivní trénink');
         <div class="p-3">
             <div class="alert alert-info">
                 <i class="fas fa-person-running me-2"></i>
-                Běh na páse - otevřete <a href="<?= BASE_URL ?>/training_run_treadmill_start.php?id=<?= $sessionId ?>" class="alert-link">detail běhu</a> pro metriky.
+                Běh na páse - otevřete <a href="<?= BASE_URL ?>/training_run_treadmill_detail.php?id=<?= $sessionId ?>" class="alert-link">detail běhu</a> pro zadání metrik po doběhu.
             </div>
         </div>
         <?php elseif ($sportType === 'run_outdoor'): ?>

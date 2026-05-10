@@ -51,7 +51,10 @@ if (!$run) {
 }
 
 $durationSeconds = max(0, (int)($input['duration_minutes'] ?? 0) * 60 + (int)($input['duration_seconds'] ?? 0));
-$distanceKm = max(0, (float)($input['distance_km'] ?? 0));
+$paceSecondsPerKm = max(0, (int)($input['pace_minutes'] ?? 0) * 60 + (int)($input['pace_seconds'] ?? 0));
+$distanceKm = $paceSecondsPerKm > 0
+    ? round($durationSeconds / $paceSecondsPerKm, 2)
+    : max(0, (float)($input['distance_km'] ?? 0));
 $caloriesBurned = ($input['calories_burned'] ?? '') !== '' ? (int)$input['calories_burned'] : null;
 $location = trim((string)($input['location'] ?? ''));
 $feeling = trim((string)($input['feeling'] ?? ''));
