@@ -148,6 +148,37 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
+    // Katalog sportovišť a míst tréninku
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `training_venues` (
+            `id`                  INT AUTO_INCREMENT PRIMARY KEY,
+            `name`                VARCHAR(255) NOT NULL,
+            `address`             VARCHAR(255) NULL,
+            `note`                TEXT NULL,
+            `is_active`           TINYINT(1) NOT NULL DEFAULT 1,
+            `created_by_coach_id` INT NULL,
+            `created_at`          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at`          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY `uq_training_venue_name` (`name`),
+            KEY `idx_training_venues_active_name` (`is_active`, `name`),
+            CONSTRAINT `fk_training_venue_coach` FOREIGN KEY (`created_by_coach_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Kompatibilita starší verze sportovišť (admin_note -> note + adresa)
+    $stmtVenueAddress = $pdo->query("SHOW COLUMNS FROM training_venues LIKE 'address'");
+    if (!$stmtVenueAddress->fetch()) {
+        $pdo->exec('ALTER TABLE training_venues ADD COLUMN address VARCHAR(255) NULL AFTER name');
+    }
+    $stmtVenueNote = $pdo->query("SHOW COLUMNS FROM training_venues LIKE 'note'");
+    if (!$stmtVenueNote->fetch()) {
+        $pdo->exec('ALTER TABLE training_venues ADD COLUMN note TEXT NULL AFTER address');
+    }
+    $stmtVenueAdminNote = $pdo->query("SHOW COLUMNS FROM training_venues LIKE 'admin_note'");
+    if ($stmtVenueAdminNote->fetch()) {
+        $pdo->exec('UPDATE training_venues SET note = admin_note WHERE note IS NULL AND admin_note IS NOT NULL');
+    }
+
     // Soft-delete tréninku trenérem (pro admin obnovu)
     $stmtTsDeleted = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_at'");
     if (!$stmtTsDeleted->fetch()) {
@@ -344,6 +375,50 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             FOREIGN KEY (`coach_id`)  REFERENCES `coaches`(`id`)          ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+}
+
+function normalizeTrainingVenueName(string $name): string {
+    $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+    return mb_substr($name, 0, 255, 'UTF-8');
+}
+
+function getTrainingVenues(bool $includeInactive = false): array {
+    $pdo = getDB();
+    if ($includeInactive) {
+        $stmt = $pdo->query(
+            'SELECT *
+             FROM `training_venues`
+             ORDER BY `is_active` DESC, `name` ASC'
+        );
+        return $stmt->fetchAll();
+    }
+
+    $stmt = $pdo->query(
+        'SELECT *
+         FROM `training_venues`
+         WHERE `is_active` = 1
+         ORDER BY `name` ASC'
+    );
+    return $stmt->fetchAll();
+}
+
+function rememberTrainingVenue(string $name, ?int $createdByCoachId = null): ?int {
+    $name = normalizeTrainingVenueName($name);
+    if ($name === '') {
+        return null;
+    }
+
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'INSERT INTO `training_venues` (`name`, `created_by_coach_id`, `is_active`)
+         VALUES (?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+            `id` = LAST_INSERT_ID(`id`),
+            `is_active` = 1'
+    );
+    $stmt->execute([$name, $createdByCoachId]);
+
+    return (int)$pdo->lastInsertId();
 }
 
 // ============================================================

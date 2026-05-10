@@ -6,6 +6,7 @@ requireAdminLogin();
 
 $pdo   = getDB();
 $flash = null;
+$trainingVenues = getTrainingVenues();
 
 // ── Zpracování formuláře ──────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -16,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $athleteId    = (int)($_POST['athlete_id'] ?? 0);
     $workoutSetId = (int)($_POST['workout_set_id'] ?? 0);
     $trainedAt    = trim($_POST['trained_at'] ?? '');
-    $location     = trim($_POST['location'] ?? '');
+    $location     = normalizeTrainingVenueName($_POST['location'] ?? '');
     $notes        = trim($_POST['notes'] ?? '');
 
     $errors = [];
@@ -32,6 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors) {
+        if ($location !== '') {
+            rememberTrainingVenue($location, null);
+        }
+
         // Parsujeme datum a čas
         $startedAt = date('Y-m-d H:i:s', strtotime($trainedAt . ' 10:00:00'));
 
@@ -166,7 +171,14 @@ renderAdminHeader('Přidat retrospektivní trénink');
                 <div class="col-md-5">
                     <label class="form-label fw-semibold">Místo <span class="text-muted fw-normal">(nepovinné)</span></label>
                     <input type="text" class="form-control" name="location"
-                           placeholder="např. Posilovna Royal" maxlength="300">
+                           list="admin-training-venues"
+                           placeholder="Vyberte existující místo nebo napište nové..." maxlength="300">
+                    <datalist id="admin-training-venues">
+                        <?php foreach ($trainingVenues as $venue): ?>
+                        <option value="<?= h((string)$venue['name']) ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                    <div class="form-text">Když napíšete nové místo, uloží se i do katalogu sportovišť.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Poznámka <span class="text-muted fw-normal">(nepovinné)</span></label>

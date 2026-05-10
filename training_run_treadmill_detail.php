@@ -8,6 +8,7 @@ requireLogin();
 
 $coachId = getCurrentCoachId();
 $pdo = getDB();
+$trainingVenues = getTrainingVenues();
 
 $sessionId = intParam($_GET, 'id', 0);
 if ($sessionId === 0) {
@@ -58,12 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         ? round($durationSeconds / $paceInputSeconds, 2)
         : 0;
     $caloriesBurned = intParam($_POST, 'calories_burned');
-    $location = trim($_POST['location'] ?? '');
+    $location = normalizeTrainingVenueName($_POST['location'] ?? '');
     $feeling = trim($_POST['feeling'] ?? '');
 
     if ($durationSeconds <= 0 || $paceInputSeconds <= 0) {
         flash('danger', 'Vyplňte dobu trvání a průměrné tempo.');
         redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
+    }
+
+    if ($location !== '') {
+        rememberTrainingVenue($location, $coachId);
     }
 
     updateRunTreadmillSession(
@@ -75,8 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $feeling !== '' ? $feeling : null
     );
 
-    $pdo->prepare('UPDATE training_sessions SET completed_at = NOW() WHERE id = ?')
-        ->execute([$sessionId]);
+    $pdo->prepare('UPDATE training_sessions SET completed_at = NOW(), location = ? WHERE id = ?')
+        ->execute([$location !== '' ? $location : null, $sessionId]);
 
     flash('success', 'Běh byl uložen a trénink ukončen.');
     redirect(BASE_URL . '/athlete_detail.php?id=' . $session['athlete_id']);
@@ -164,9 +169,27 @@ renderHeader('Běh na páse – Detail');
                                 </div>
                                 <div class="col-12 col-md-8">
                                     <label class="form-label fw-semibold">Místo <span class="text-muted fw-normal">(nepovinné)</span></label>
+                                    <?php
+                                    $currentTreadmillLocation = (string)($runTreadmill['location'] ?? $session['location'] ?? '');
+                                    $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues);
+                                    $isCustomTreadmillLocation = $currentTreadmillLocation !== '' && !in_array($currentTreadmillLocation, $knownVenueNames, true);
+                                    ?>
+                                    <select class="form-select mb-2" id="treadmill-location-select">
+                                        <option value="">- Bez místa -</option>
+                                        <?php foreach ($trainingVenues as $venue): ?>
+                                        <?php $venueName = (string)$venue['name']; ?>
+                                        <option value="<?= h($venueName) ?>" <?= $venueName === $currentTreadmillLocation ? 'selected' : '' ?>>
+                                            <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <option value="__custom__" <?= $isCustomTreadmillLocation ? 'selected' : '' ?>>Jiné místo (zadat ručně)</option>
+                                    </select>
                                     <input type="text" name="location" class="form-control"
-                                           value="<?= h($runTreadmill['location'] ?? '') ?>"
-                                           placeholder="např. fitness centrum, domácí trénink">
+                                           id="treadmill-location-input"
+                                           value="<?= h($currentTreadmillLocation) ?>"
+                                           placeholder="Napište nové místo..."
+                                           <?= $isCustomTreadmillLocation ? '' : 'readonly' ?>>
+                                    <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label fw-semibold">Pocit <span class="text-muted fw-normal">(nepovinné)</span></label>
@@ -300,6 +323,26 @@ renderHeader('Běh na páse – Detail');
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('treadmill-form');
     const statusEl = document.getElementById('treadmill-autosave-status');
+    const locationSelect = document.getElementById('treadmill-location-select');
+    const locationInput = document.getElementById('treadmill-location-input');
+
+    if (locationSelect && locationInput) {
+        const syncLocationInput = function() {
+            const value = locationSelect.value;
+            if (value === '__custom__') {
+                locationInput.readOnly = false;
+                locationInput.focus();
+                return;
+            }
+
+            locationInput.readOnly = true;
+            locationInput.value = value;
+        };
+
+        locationSelect.addEventListener('change', syncLocationInput);
+        syncLocationInput();
+    }
+
     if (!form || !window.createSportAutosave) {
         return;
     }

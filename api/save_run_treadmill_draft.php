@@ -56,8 +56,12 @@ $distanceKm = $paceSecondsPerKm > 0
     ? round($durationSeconds / $paceSecondsPerKm, 2)
     : max(0, (float)($input['distance_km'] ?? 0));
 $caloriesBurned = ($input['calories_burned'] ?? '') !== '' ? (int)$input['calories_burned'] : null;
-$location = trim((string)($input['location'] ?? ''));
+$location = normalizeTrainingVenueName((string)($input['location'] ?? ''));
 $feeling = trim((string)($input['feeling'] ?? ''));
+
+if ($location !== '') {
+    rememberTrainingVenue($location, $coachId);
+}
 
 updateRunTreadmillSession(
     (int)$run['id'],
@@ -67,6 +71,9 @@ updateRunTreadmillSession(
     $location !== '' ? $location : null,
     $feeling !== '' ? $feeling : null
 );
+
+$pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
+    ->execute([$location !== '' ? $location : null, $sessionId]);
 
 echo json_encode([
     'success' => true,

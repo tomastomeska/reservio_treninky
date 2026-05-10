@@ -8,6 +8,7 @@ requireLogin();
 $coachId   = getCurrentCoachId();
 $sessionId = intParam($_GET, 'id');
 $pdo       = getDB();
+$trainingVenues = getTrainingVenues();
 
 // Načtení session + ověření, že patří trenérovi
 $stmt = $pdo->prepare(
@@ -267,8 +268,27 @@ renderHeader('Aktivní trénink');
                             <i class="fas fa-map-marker-alt me-1"></i>Místo tréninku
                             <small class="text-muted">(volitelné)</small>
                         </label>
+                        <?php
+                        $currentLocation = (string)($session['location'] ?? '');
+                        $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues);
+                        $isCustomLocation = $currentLocation !== '' && !in_array($currentLocation, $knownVenueNames, true);
+                        ?>
+                        <select class="form-select mb-2" id="complete-location-select">
+                            <option value="">- Bez místa -</option>
+                            <?php foreach ($trainingVenues as $venue): ?>
+                            <?php $venueName = (string)$venue['name']; ?>
+                            <option value="<?= h($venueName) ?>" <?= $venueName === $currentLocation ? 'selected' : '' ?>>
+                                <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                            <option value="__custom__" <?= $isCustomLocation ? 'selected' : '' ?>>Jiné místo (zadat ručně)</option>
+                        </select>
                         <input type="text" name="location" class="form-control"
-                               placeholder="např. FitStudio Praha, Home gym...">
+                               id="complete-location-input"
+                               value="<?= h($currentLocation) ?>"
+                               placeholder="Napište nové místo..."
+                               <?= $isCustomLocation ? '' : 'readonly' ?>>
+                        <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label fw-semibold">Poznámka <small class="text-muted">(volitelné)</small></label>
@@ -448,6 +468,29 @@ document.querySelectorAll('.series-assist').forEach(function(el) {
             addSeries(parseInt(exerciseId), <?= $sessionId ?>);
         }
     });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const locationSelect = document.getElementById('complete-location-select');
+    const locationInput = document.getElementById('complete-location-input');
+    if (!locationSelect || !locationInput) {
+        return;
+    }
+
+    const syncLocationInput = function() {
+        const value = locationSelect.value;
+        if (value === '__custom__') {
+            locationInput.readOnly = false;
+            locationInput.focus();
+            return;
+        }
+
+        locationInput.readOnly = true;
+        locationInput.value = value;
+    };
+
+    locationSelect.addEventListener('change', syncLocationInput);
+    syncLocationInput();
 });
 </script>
 

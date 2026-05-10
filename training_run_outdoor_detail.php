@@ -29,6 +29,8 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
+$trainingVenues = getTrainingVenues();
+
 $runOutdoor = getRunOutdoorSessionByTrainingSession($sessionId);
 if (!$runOutdoor) {
     createRunOutdoorSession($sessionId);
@@ -45,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     $distanceKm = (float)($_POST['distance_km'] ?? 0);
     $runType = (string)($_POST['run_type'] ?? 'free');
     $surface = (string)($_POST['surface'] ?? 'asphalt');
+    $location = normalizeTrainingVenueName($_POST['location'] ?? '');
 
     $allowedRunTypes = ['free', 'intervals', 'tempo', 'race', 'recovery'];
     $allowedSurfaces = ['asphalt', 'trail', 'mixed'];
@@ -67,6 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
     }
 
+    if ($location !== '') {
+        rememberTrainingVenue($location, $coachId);
+    }
+
     updateRunOutdoorSession(
         (int)$runOutdoor['id'],
         $durationSeconds,
@@ -80,6 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $tempoVariability,
         $feeling !== '' ? $feeling : null
     );
+
+    $pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
+        ->execute([$location !== '' ? $location : null, $sessionId]);
 
     $splitKm = $_POST['split_km'] ?? [];
     $splitTime = $_POST['split_time'] ?? [];
@@ -202,6 +212,35 @@ renderHeader('Běh venku - detail');
                                     <option value="trail" <?= $runOutdoor['surface'] === 'trail' ? 'selected' : '' ?>>Terén</option>
                                     <option value="mixed" <?= $runOutdoor['surface'] === 'mixed' ? 'selected' : '' ?>>Mix</option>
                                 </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Místo</label>
+                                <?php
+                                $currentOutdoorLocation = (string)($session['location'] ?? '');
+                                $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues);
+                                $isCustomOutdoorLocation = $currentOutdoorLocation !== '' && !in_array($currentOutdoorLocation, $knownVenueNames, true);
+                                ?>
+                                <select class="form-select mb-2" id="run-outdoor-location-select">
+                                    <option value="">- Bez místa -</option>
+                                    <?php foreach ($trainingVenues as $venue): ?>
+                                    <?php $venueName = (string)$venue['name']; ?>
+                                    <option value="<?= h($venueName) ?>" <?= $venueName === $currentOutdoorLocation ? 'selected' : '' ?>>
+                                        <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                    <option value="__custom__" <?= $isCustomOutdoorLocation ? 'selected' : '' ?>>Jiné místo (zadat ručně)</option>
+                                </select>
+                                <input type="text" class="form-control" name="location"
+                                       id="run-outdoor-location-input"
+                                       value="<?= h($currentOutdoorLocation) ?>"
+                                       placeholder="Napište nové místo..."
+                                       <?= $isCustomOutdoorLocation ? '' : 'readonly' ?>>
+                                <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
                             </div>
                         </div>
                     </div>
@@ -410,6 +449,26 @@ function removeSplitRow(btn) {
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('run-outdoor-form');
     const statusEl = document.getElementById('run-outdoor-autosave-status');
+    const locationSelect = document.getElementById('run-outdoor-location-select');
+    const locationInput = document.getElementById('run-outdoor-location-input');
+
+    if (locationSelect && locationInput) {
+        const syncLocationInput = function() {
+            const value = locationSelect.value;
+            if (value === '__custom__') {
+                locationInput.readOnly = false;
+                locationInput.focus();
+                return;
+            }
+
+            locationInput.readOnly = true;
+            locationInput.value = value;
+        };
+
+        locationSelect.addEventListener('change', syncLocationInput);
+        syncLocationInput();
+    }
+
     if (!form || !window.createSportAutosave) {
         return;
     }
@@ -440,6 +499,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 duration_minutes: form.querySelector('[name="duration_minutes"]').value || '0',
                 duration_seconds: form.querySelector('[name="duration_seconds"]').value || '0',
                 distance_km: form.querySelector('[name="distance_km"]').value || '',
+                location: form.querySelector('[name="location"]').value || '',
                 run_type: form.querySelector('[name="run_type"]').value || 'free',
                 surface: form.querySelector('[name="surface"]').value || 'asphalt',
                 max_speed: form.querySelector('[name="max_speed"]').value || '',

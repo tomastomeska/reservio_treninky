@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !verifyCsrf($_POST['csrf_token'] ??
 
 $coachId  = getCurrentCoachId();
 $pairedId = intParam($_POST, 'paired_session_id');
-$location = trim($_POST['location'] ?? '');
+$location = normalizeTrainingVenueName($_POST['location'] ?? '');
 $pdo      = getDB();
 
 // Načti všechny nedokončené session v tomto párovém tréninku
@@ -30,6 +30,10 @@ $sessions = $stmt->fetchAll();
 if (empty($sessions)) {
     flash('danger', 'Párový trénink nenalezen nebo již dokončen.');
     redirect(BASE_URL . '/dashboard.php');
+}
+
+if ($location !== '') {
+    rememberTrainingVenue($location, $coachId);
 }
 
 $now = date('Y-m-d H:i:s');

@@ -370,6 +370,9 @@ function resizeAndSavePhoto(string $inputName, string $subDir, int $maxDim = 192
 /**
  * Opraví orientaci GD obrazu dle EXIF orientation tagu (1–8).
  * Vrátí nový nebo původní resource.
+ *
+ * @param \GdImage|resource $img
+ * @return \GdImage|resource
  */
 function _applyExifOrientation($img, int $orientation) {
     switch ($orientation) {

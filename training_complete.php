@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !verifyCsrf($_POST['csrf_token'] ??
 
 $coachId   = getCurrentCoachId();
 $sessionId = intParam($_POST, 'session_id');
-$location  = trim($_POST['location'] ?? '');
+$location  = normalizeTrainingVenueName($_POST['location'] ?? '');
 $notes     = trim($_POST['notes']    ?? '');
 $pdo       = getDB();
 
@@ -51,6 +51,10 @@ $session = $stmt->fetch();
 if (!$session) {
     flash('danger', 'Trénink nenalezen nebo již dokončen.');
     redirect(BASE_URL . '/dashboard.php');
+}
+
+if ($location !== '') {
+    rememberTrainingVenue($location, $coachId);
 }
 
 try {

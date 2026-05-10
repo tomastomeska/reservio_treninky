@@ -54,6 +54,7 @@ $durationSeconds = max(0, (int)($input['duration_minutes'] ?? 0) * 60 + (int)($i
 $distanceKm = max(0, (float)($input['distance_km'] ?? 0));
 $runType = (string)($input['run_type'] ?? 'free');
 $surface = (string)($input['surface'] ?? 'asphalt');
+$location = normalizeTrainingVenueName((string)($input['location'] ?? ''));
 $allowedRunTypes = ['free', 'intervals', 'tempo', 'race', 'recovery'];
 $allowedSurfaces = ['asphalt', 'trail', 'mixed'];
 if (!in_array($runType, $allowedRunTypes, true)) {
@@ -70,6 +71,10 @@ $rpe = ($input['rpe'] ?? '') !== '' ? (int)$input['rpe'] : null;
 $tempoVariability = ($input['tempo_variability'] ?? '') !== '' ? (float)$input['tempo_variability'] : null;
 $feeling = trim((string)($input['feeling'] ?? ''));
 
+if ($location !== '') {
+    rememberTrainingVenue($location, $coachId);
+}
+
 updateRunOutdoorSession(
     (int)$run['id'],
     $durationSeconds,
@@ -83,6 +88,9 @@ updateRunOutdoorSession(
     $tempoVariability,
     $feeling !== '' ? $feeling : null
 );
+
+$pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
+    ->execute([$location !== '' ? $location : null, $sessionId]);
 
 $splitsInput = $input['splits'] ?? [];
 $splits = [];

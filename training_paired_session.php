@@ -9,6 +9,7 @@ requireLogin();
 $coachId  = getCurrentCoachId();
 $pairedId = intParam($_GET, 'id');
 $pdo      = getDB();
+$trainingVenues = getTrainingVenues();
 
 // Ověření párového tréninku
 $stmt = $pdo->prepare('SELECT id, started_at FROM paired_sessions WHERE id = ? AND coach_id = ?');
@@ -309,8 +310,22 @@ renderHeader('Párový trénink');
                             <i class="fas fa-map-marker-alt me-1"></i>Místo tréninku
                             <small class="text-muted">(volitelné, společné pro oba)</small>
                         </label>
+                        <?php $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues); ?>
+                        <select class="form-select mb-2" id="paired-location-select">
+                            <option value="">- Bez místa -</option>
+                            <?php foreach ($trainingVenues as $venue): ?>
+                            <?php $venueName = (string)$venue['name']; ?>
+                            <option value="<?= h($venueName) ?>">
+                                <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                            <option value="__custom__">Jiné místo (zadat ručně)</option>
+                        </select>
                         <input type="text" name="location" class="form-control"
-                               placeholder="např. FitStudio Praha, Home gym...">
+                               id="paired-location-input"
+                               placeholder="Napište nové místo..."
+                               readonly>
+                        <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
                     </div>
                     <hr>
                     <?php foreach ($sessionData as $sd): ?>
@@ -341,6 +356,29 @@ renderHeader('Párový trénink');
 
 <script>
 const BASE_URL = '<?= BASE_URL ?>';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const locationSelect = document.getElementById('paired-location-select');
+    const locationInput = document.getElementById('paired-location-input');
+    if (!locationSelect || !locationInput) {
+        return;
+    }
+
+    const syncLocationInput = function() {
+        const value = locationSelect.value;
+        if (value === '__custom__') {
+            locationInput.readOnly = false;
+            locationInput.focus();
+            return;
+        }
+
+        locationInput.readOnly = true;
+        locationInput.value = value;
+    };
+
+    locationSelect.addEventListener('change', syncLocationInput);
+    syncLocationInput();
+});
 
 async function addPairedSeries(sessionId, exerciseId) {
     const key    = sessionId + '-' + exerciseId;
