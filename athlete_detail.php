@@ -73,6 +73,10 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
     </a>
     <h2 class="mb-0 fw-bold"><?= h($athlete['first_name'] . ' ' . $athlete['last_name']) ?></h2>
     <div class="ms-auto d-flex gap-2 flex-wrap">
+        <a href="<?= BASE_URL ?>/training_manual_add.php?athlete_id=<?= $athleteId ?>"
+           class="btn btn-outline-warning btn-sm">
+            <i class="fas fa-calendar-plus me-1"></i>Přidat minulý trénink
+        </a>
         <a href="<?= BASE_URL ?>/graphs.php?athlete_id=<?= $athleteId ?>"
            class="btn btn-outline-info btn-sm">
             <i class="fas fa-chart-line me-1"></i>Grafy

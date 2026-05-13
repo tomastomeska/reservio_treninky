@@ -455,6 +455,131 @@ function photoUrl(?string $filename, string $subDir): string {
 }
 
 /**
+ * Uloží jednu nebo více fotek z upload inputu.
+ * Podporuje input typu single i multiple.
+ *
+ * @return string[] Pole názvů uložených souborů.
+ */
+function saveTrainingPhotosFromInput(string $inputName, string $subDir = 'trainings', int $maxPhotoSize = 8388608): array {
+  if (empty($_FILES[$inputName])) {
+    return [];
+  }
+
+  $file = $_FILES[$inputName];
+  $saved = [];
+
+  // multiple input: name="foo[]"
+  if (is_array($file['name'] ?? null)) {
+    $count = count($file['name']);
+    for ($i = 0; $i < $count; $i++) {
+      $err = (int)($file['error'][$i] ?? UPLOAD_ERR_NO_FILE);
+      if ($err === UPLOAD_ERR_NO_FILE) {
+        continue;
+      }
+      if ($err !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Nahrávání fotografie selhalo.');
+      }
+
+      $size = (int)($file['size'][$i] ?? 0);
+      if ($size > $maxPhotoSize) {
+        throw new RuntimeException('Jedna z fotografií je příliš velká. Maximum je 8 MB.');
+      }
+
+      $tmpKey = '__upload_photo_tmp';
+      $_FILES[$tmpKey] = [
+        'name' => $file['name'][$i] ?? '',
+        'type' => $file['type'][$i] ?? '',
+        'tmp_name' => $file['tmp_name'][$i] ?? '',
+        'error' => $err,
+        'size' => $size,
+      ];
+      $filename = resizeAndSavePhoto($tmpKey, $subDir);
+      unset($_FILES[$tmpKey]);
+
+      if (!$filename) {
+        throw new RuntimeException('Podporujeme pouze obrázky JPG, PNG, GIF nebo WEBP.');
+      }
+      $saved[] = $filename;
+    }
+
+    return $saved;
+  }
+
+  // single input
+  $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+  if ($err === UPLOAD_ERR_NO_FILE) {
+    return [];
+  }
+  if ($err !== UPLOAD_ERR_OK) {
+    throw new RuntimeException('Nahrávání fotografie selhalo.');
+  }
+
+  $size = (int)($file['size'] ?? 0);
+  if ($size > $maxPhotoSize) {
+    throw new RuntimeException('Fotografie je příliš velká. Maximum je 8 MB.');
+  }
+
+  $filename = resizeAndSavePhoto($inputName, $subDir);
+  if (!$filename) {
+    throw new RuntimeException('Podporujeme pouze obrázky JPG, PNG, GIF nebo WEBP.');
+  }
+
+  return [$filename];
+}
+
+function addTrainingSessionPhotos(int $sessionId, array $filenames): void {
+  if (empty($filenames)) {
+    return;
+  }
+
+  $pdo = getDB();
+  $stmtOrder = $pdo->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM training_session_photos WHERE session_id = ?');
+  $stmtOrder->execute([$sessionId]);
+  $nextOrder = (int)$stmtOrder->fetchColumn();
+
+  $stmtIns = $pdo->prepare(
+    'INSERT INTO training_session_photos (session_id, filename, sort_order)
+     VALUES (?, ?, ?)'
+  );
+
+  foreach ($filenames as $filename) {
+    $nextOrder++;
+    $stmtIns->execute([$sessionId, (string)$filename, $nextOrder]);
+  }
+}
+
+function getTrainingSessionPhotos(int $sessionId): array {
+  $pdo = getDB();
+  $stmt = $pdo->prepare(
+    'SELECT id, session_id, filename, sort_order, created_at
+     FROM training_session_photos
+     WHERE session_id = ?
+     ORDER BY sort_order ASC, id ASC'
+  );
+  $stmt->execute([$sessionId]);
+  return $stmt->fetchAll();
+}
+
+function deleteTrainingSessionPhotoById(int $photoId): ?array {
+  $pdo = getDB();
+  $stmt = $pdo->prepare('SELECT * FROM training_session_photos WHERE id = ? LIMIT 1');
+  $stmt->execute([$photoId]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    return null;
+  }
+
+  $pdo->prepare('DELETE FROM training_session_photos WHERE id = ?')->execute([$photoId]);
+  return $row;
+}
+
+function deleteTrainingSessionPhotosByFilename(int $sessionId, string $filename): void {
+  $pdo = getDB();
+  $stmt = $pdo->prepare('DELETE FROM training_session_photos WHERE session_id = ? AND filename = ?');
+  $stmt->execute([$sessionId, $filename]);
+}
+
+/**
  * Odešle e-mail sportovci se souhrnem dokončeného tréninku přes SMTP (PHPMailer).
  * Vrátí true při úspěchu, false při chybě.
  *

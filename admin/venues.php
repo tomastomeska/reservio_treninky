@@ -99,6 +99,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('success', 'Sportoviště bylo upraveno.');
         redirect(BASE_URL . '/admin/venues.php');
     }
+
+    if ($action === 'delete') {
+        $venueId = (int)($_POST['venue_id'] ?? 0);
+        if ($venueId <= 0) {
+            flash('danger', 'Sportoviště se nepodařilo smazat.');
+            redirect(BASE_URL . '/admin/venues.php');
+        }
+
+        $stmtVenue = $pdo->prepare('SELECT id, name FROM training_venues WHERE id = ?');
+        $stmtVenue->execute([$venueId]);
+        $venue = $stmtVenue->fetch();
+        if (!$venue) {
+            flash('danger', 'Sportoviště nebylo nalezeno.');
+            redirect(BASE_URL . '/admin/venues.php');
+        }
+
+        $oldName = (string)$venue['name'];
+        $usageStmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM training_sessions ts
+             WHERE ts.location COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci'
+        );
+        $usageStmt->execute([$oldName]);
+        $usageCount = (int)$usageStmt->fetchColumn();
+
+        if ($usageCount > 0) {
+            $replacementVenueId = (int)($_POST['replacement_venue_id'] ?? 0);
+            if ($replacementVenueId <= 0 || $replacementVenueId === $venueId) {
+                flash('danger', 'Toto sportoviště je použité v trénincích. Před smazáním vyberte náhradní sportoviště.');
+                redirect(BASE_URL . '/admin/venues.php');
+            }
+
+            $stmtReplacement = $pdo->prepare('SELECT id, name FROM training_venues WHERE id = ?');
+            $stmtReplacement->execute([$replacementVenueId]);
+            $replacementVenue = $stmtReplacement->fetch();
+            if (!$replacementVenue) {
+                flash('danger', 'Náhradní sportoviště nebylo nalezeno.');
+                redirect(BASE_URL . '/admin/venues.php');
+            }
+
+            $replacementName = (string)$replacementVenue['name'];
+
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare('UPDATE training_sessions SET location = ? WHERE location COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci')
+                    ->execute([$replacementName, $oldName]);
+                $pdo->prepare('UPDATE run_treadmill_sessions SET location = ? WHERE location COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci')
+                    ->execute([$replacementName, $oldName]);
+                $pdo->prepare('DELETE FROM training_venues WHERE id = ?')
+                    ->execute([$venueId]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                flash('danger', 'Smazání sportoviště selhalo.');
+                redirect(BASE_URL . '/admin/venues.php');
+            }
+
+            flash('success', 'Sportoviště bylo smazáno a ' . $usageCount . ' tréninků bylo převedeno na náhradní místo.');
+            redirect(BASE_URL . '/admin/venues.php');
+        }
+
+        $pdo->prepare('DELETE FROM training_venues WHERE id = ?')->execute([$venueId]);
+        flash('success', 'Sportoviště bylo smazáno.');
+        redirect(BASE_URL . '/admin/venues.php');
+    }
 }
 
 $venues = $pdo->query(
@@ -149,71 +216,178 @@ renderAdminHeader('Sportoviště');
 </div>
 
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white fw-semibold">Seznam sportovišť</div>
-    <div class="card-body p-0">
+    <div class="card-header bg-white fw-semibold d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <span>Seznam sportovišť</span>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text" id="venues-search" class="form-control form-control-sm" placeholder="Hledat název, adresu, poznámku..." style="min-width:280px;">
+            <select id="venues-filter-active" class="form-select form-select-sm" style="width:auto;">
+                <option value="all">Vše</option>
+                <option value="active" selected>Aktivní</option>
+                <option value="inactive">Neaktivní</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
         <?php if (empty($venues)): ?>
         <div class="text-center py-5 text-muted">Zatím tu není žádné sportoviště.</div>
         <?php else: ?>
-        <div class="table-responsive">
-            <table class="table align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Název</th>
-                        <th>Adresa</th>
-                        <th>Poznámka</th>
-                        <th>Přidal</th>
-                        <th>Použití</th>
-                        <th>Aktivní</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($venues as $venue): ?>
-                    <tr>
-                        <td colspan="6" class="p-0 border-0">
-                            <form method="post" class="row g-0 align-items-center border-top px-3 py-3">
-                                <?= csrfField() ?>
-                                <input type="hidden" name="action" value="update">
-                                <input type="hidden" name="venue_id" value="<?= (int)$venue['id'] ?>">
+        <div id="venues-list" class="d-flex flex-column gap-3">
+            <?php foreach ($venues as $venue): ?>
+            <?php
+            $venueName = (string)$venue['name'];
+            $venueAddress = (string)($venue['address'] ?? '');
+            $venueNote = (string)($venue['note'] ?? $venue['admin_note'] ?? '');
+            $venueCreator = !empty($venue['coach_name']) || !empty($venue['coach_username'])
+                ? (string)($venue['coach_name'] ?: $venue['coach_username'])
+                : 'Admin nebo import';
+            ?>
+            <form method="post"
+                  class="venue-item border rounded-3 p-3 bg-light"
+                  data-name="<?= h(mb_strtolower($venueName, 'UTF-8')) ?>"
+                  data-address="<?= h(mb_strtolower($venueAddress, 'UTF-8')) ?>"
+                  data-note="<?= h(mb_strtolower($venueNote, 'UTF-8')) ?>"
+                  data-active="<?= (int)$venue['is_active'] === 1 ? '1' : '0' ?>">
+                <?= csrfField() ?>
+                <input type="hidden" name="venue_id" value="<?= (int)$venue['id'] ?>">
 
-                                <div class="col-md-3 pe-md-2 mb-2 mb-md-0">
-                                    <input type="text" name="name" class="form-control" maxlength="255" required value="<?= h((string)$venue['name']) ?>">
-                                </div>
-                                <div class="col-md-3 pe-md-2 mb-2 mb-md-0">
-                                    <input type="text" name="address" class="form-control" maxlength="255" value="<?= h((string)($venue['address'] ?? '')) ?>" placeholder="Adresa...">
-                                </div>
-                                <div class="col-md-2 pe-md-2 mb-2 mb-md-0">
-                                    <input type="text" name="note" class="form-control" maxlength="500" value="<?= h((string)($venue['note'] ?? $venue['admin_note'] ?? '')) ?>" placeholder="Poznámka...">
-                                </div>
-                                <div class="col-md-2 pe-md-2 mb-2 mb-md-0 text-muted small">
-                                    <?php if (!empty($venue['coach_name']) || !empty($venue['coach_username'])): ?>
-                                    <?= h((string)($venue['coach_name'] ?: $venue['coach_username'])) ?>
-                                    <?php else: ?>
-                                    Admin nebo import
-                                    <?php endif; ?>
-                                </div>
-                                <div class="col-md-1 pe-md-1 mb-2 mb-md-0 text-muted small">
-                                    <?= (int)$venue['usage_count'] ?>x
-                                </div>
-                                <div class="col-md-1 pe-md-1 mb-2 mb-md-0 text-center">
-                                    <div class="form-check d-inline-flex align-items-center justify-content-center m-0">
-                                        <input class="form-check-input" type="checkbox" name="is_active" value="1" <?= (int)$venue['is_active'] === 1 ? 'checked' : '' ?>>
-                                    </div>
-                                </div>
-                                <div class="col-md-1 text-md-end">
-                                    <button type="submit" class="btn btn-outline-primary fw-semibold">
-                                        <i class="fas fa-save me-1"></i>Uložit
-                                    </button>
-                                </div>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <span class="badge text-bg-dark"><?= (int)$venue['usage_count'] ?>x použito</span>
+                        <span class="badge <?= (int)$venue['is_active'] === 1 ? 'text-bg-success' : 'text-bg-secondary' ?>">
+                            <?= (int)$venue['is_active'] === 1 ? 'Aktivní' : 'Neaktivní' ?>
+                        </span>
+                        <span class="small text-muted">Přidal: <?= h($venueCreator) ?></span>
+                    </div>
+                </div>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-3">
+                        <label class="form-label small text-muted mb-1">Název</label>
+                        <input type="text" name="name" class="form-control" maxlength="255" required value="<?= h($venueName) ?>">
+                    </div>
+                    <div class="col-12 col-lg-3">
+                        <label class="form-label small text-muted mb-1">Adresa</label>
+                        <input type="text" name="address" class="form-control" maxlength="255" value="<?= h($venueAddress) ?>" placeholder="Adresa...">
+                    </div>
+                    <div class="col-12 col-lg-3">
+                        <label class="form-label small text-muted mb-1">Poznámka</label>
+                        <input type="text" name="note" class="form-control" maxlength="500" value="<?= h($venueNote) ?>" placeholder="Poznámka...">
+                    </div>
+                    <div class="col-6 col-lg-1 text-lg-center">
+                        <label class="form-label small text-muted mb-1 d-block">Aktivní</label>
+                        <div class="form-check d-inline-flex align-items-center justify-content-center m-0">
+                            <input class="form-check-input" type="checkbox" name="is_active" value="1" <?= (int)$venue['is_active'] === 1 ? 'checked' : '' ?>>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-2">
+                        <label class="form-label small text-muted mb-1">Náhrada při smazání</label>
+                        <select name="replacement_venue_id" class="form-select form-select-sm" title="Náhrada při smazání použitého sportoviště">
+                            <option value="">Vybrat náhradu</option>
+                            <?php foreach ($venues as $replacementVenue): ?>
+                            <?php if ((int)$replacementVenue['id'] === (int)$venue['id']) continue; ?>
+                            <?php $replacementName = (string)$replacementVenue['name']; ?>
+                            <option value="<?= (int)$replacementVenue['id'] ?>">
+                                <?= h($replacementName) ?><?= !empty($replacementVenue['address']) ? ' - ' . h((string)$replacementVenue['address']) : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 justify-content-end mt-3">
+                    <button type="submit" name="action" value="update" class="btn btn-outline-primary fw-semibold">
+                        <i class="fas fa-save me-1"></i>Uložit
+                    </button>
+                    <button type="submit" name="action" value="delete" class="btn btn-outline-danger fw-semibold"
+                            formnovalidate
+                            onclick="return confirm('Opravdu chcete toto sportoviště smazat? Pokud je použité v trénincích, vyberte předtím náhradní sportoviště.')">
+                        <i class="fas fa-trash me-1"></i>Smazat
+                    </button>
+                </div>
+            </form>
+            <?php endforeach; ?>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <small id="venues-visible-count" class="text-muted"></small>
+            <button type="button" id="venues-load-more" class="btn btn-outline-secondary btn-sm">Načíst další</button>
         </div>
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('venues-search');
+    const activeFilter = document.getElementById('venues-filter-active');
+    const items = Array.from(document.querySelectorAll('.venue-item'));
+    const loadMoreBtn = document.getElementById('venues-load-more');
+    const visibleCountEl = document.getElementById('venues-visible-count');
+    const pageSize = 12;
+    let shown = pageSize;
+
+    if (!items.length) {
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = 'none';
+        }
+        return;
+    }
+
+    const getFilteredItems = function() {
+        const q = (searchInput?.value || '').trim().toLowerCase();
+        const mode = activeFilter?.value || 'all';
+
+        return items.filter(function(item) {
+            const haystack = [
+                item.getAttribute('data-name') || '',
+                item.getAttribute('data-address') || '',
+                item.getAttribute('data-note') || ''
+            ].join(' ');
+
+            const isActive = item.getAttribute('data-active') === '1';
+            const activeOk = mode === 'all' || (mode === 'active' ? isActive : !isActive);
+            const textOk = q === '' || haystack.includes(q);
+
+            return activeOk && textOk;
+        });
+    };
+
+    const render = function(resetShown) {
+        if (resetShown) {
+            shown = pageSize;
+        }
+
+        const filtered = getFilteredItems();
+        items.forEach(function(item) { item.style.display = 'none'; });
+
+        filtered.slice(0, shown).forEach(function(item) {
+            item.style.display = '';
+        });
+
+        const visible = Math.min(shown, filtered.length);
+        if (visibleCountEl) {
+            visibleCountEl.textContent = 'Zobrazeno ' + visible + ' z ' + filtered.length + ' položek';
+        }
+
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = visible < filtered.length ? '' : 'none';
+        }
+    };
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() { render(true); });
+    }
+    if (activeFilter) {
+        activeFilter.addEventListener('change', function() { render(true); });
+    }
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', function() {
+            shown += pageSize;
+            render(false);
+        });
+    }
+
+    render(true);
+});
+</script>
 
 <?php renderAdminFooter(); ?>

@@ -300,18 +300,42 @@ renderHeader('Aktivní trénink');
                             <i class="fas fa-camera me-1"></i>Fotografie z tréninku
                             <small class="text-muted">(volitelné)</small>
                         </label>
-                        <input type="file"
-                               name="training_photo"
-                               class="form-control"
-                               accept="image/*"
-                               capture="environment"
-                               onchange="previewTrainingPhoto(this)">
-                        <div class="form-text">
-                            Mobil/tablet nabídne fotoaparát, na počítači výběr souboru. Podporováno JPG, PNG, GIF, WEBP (max 8 MB).
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <input type="file"
+                                   id="cameraCaptureInput"
+                                   class="d-none"
+                                   accept="image/*"
+                                   capture="environment"
+                                   onchange="collectTrainingPhotos(this.files)">
+                            <label for="cameraCaptureInput" class="btn btn-outline-warning btn-sm mb-0">
+                                <i class="fas fa-camera me-1"></i>Vyfotit
+                            </label>
+
+                            <input type="file"
+                                   id="gallerySelectInput"
+                                   class="d-none"
+                                   accept="image/*"
+                                   multiple
+                                   onchange="collectTrainingPhotos(this.files)">
+                            <label for="gallerySelectInput" class="btn btn-outline-secondary btn-sm mb-0">
+                                <i class="fas fa-images me-1"></i>Vybrat z galerie
+                            </label>
                         </div>
-                        <img id="training-photo-preview" alt="Náhled fotky"
-                             class="img-fluid rounded border mt-2 d-none"
-                             style="max-height:220px; object-fit:cover;">
+
+                        <!-- Skutečný submit input s nasbíranými soubory -->
+                        <input type="file"
+                               id="trainingPhotosCollector"
+                               name="training_photos[]"
+                               class="d-none"
+                               accept="image/*"
+                               multiple>
+
+                        <div class="form-text">
+                            Na mobilu/tabletu můžete fotky postupně přidávat: vyfotit i vybrat z galerie.
+                            Podporováno JPG, PNG, GIF, WEBP (max 8 MB na soubor).
+                        </div>
+                            <div id="training-photo-summary" class="small text-muted mt-2">Zatím nejsou vybrané žádné fotky.</div>
+                            <div id="training-photo-previews" class="d-flex flex-wrap gap-2 mt-2"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -432,32 +456,114 @@ function updateSeriesCount(exerciseId) {
     }
 }
 
-function previewTrainingPhoto(input) {
-    const preview = document.getElementById('training-photo-preview');
-    const file = input.files && input.files[0] ? input.files[0] : null;
-    if (!preview || !file) {
-        if (preview) {
-            preview.classList.add('d-none');
-            preview.removeAttribute('src');
-        }
-        return;
-    }
+function renderTrainingPhotoPreviews() {
+    const collector = document.getElementById('trainingPhotosCollector');
+    const previews = document.getElementById('training-photo-previews');
+    if (!collector || !previews) return;
+    previews.innerHTML = '';
+    const files = collector.files ? Array.from(collector.files) : [];
+    if (files.length === 0) return;
+    files.forEach((file, idx) => {
+        const previewable = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!previewable.includes(file.type.toLowerCase())) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'position-relative';
+            wrapper.style.display = 'inline-block';
+            wrapper.style.maxWidth = '110px';
+            wrapper.style.maxHeight = '110px';
+            wrapper.style.marginRight = '6px';
+            wrapper.style.marginBottom = '6px';
 
-    // HEIC a jiné formáty nepodporované prohlížečem nelze zobrazit jako náhled
-    const previewable = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!previewable.includes(file.type.toLowerCase())) {
-        preview.classList.add('d-none');
-        preview.removeAttribute('src');
-        return;
-    }
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.className = 'img-thumbnail';
+            img.style.width = '100px';
+            img.style.height = '100px';
+            img.style.objectFit = 'cover';
+            img.alt = 'Náhled fotky';
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        preview.src = e.target.result;
-        preview.classList.remove('d-none');
-    };
-    reader.readAsDataURL(file);
+            // Křížek pro odstranění
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-danger position-absolute top-0 end-0 translate-middle p-1';
+            removeBtn.style.zIndex = '2';
+            removeBtn.style.borderRadius = '50%';
+            removeBtn.title = 'Odebrat fotku';
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            removeBtn.onclick = function() {
+                removeTrainingPhoto(idx);
+            };
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(removeBtn);
+            previews.appendChild(wrapper);
+        };
+        reader.readAsDataURL(file);
+    });
 }
+
+function collectTrainingPhotos(fileList) {
+    const collector = document.getElementById('trainingPhotosCollector');
+    const summary = document.getElementById('training-photo-summary');
+    if (!collector || !summary || !fileList || fileList.length === 0) {
+        return;
+    }
+
+    const dt = new DataTransfer();
+    const existing = collector.files ? Array.from(collector.files) : [];
+    existing.forEach(file => dt.items.add(file));
+    Array.from(fileList).forEach(file => dt.items.add(file));
+    collector.files = dt.files;
+
+    const total = collector.files.length;
+    summary.textContent = total === 1
+        ? 'Vybraná 1 fotka.'
+        : ('Vybráno fotek: ' + total);
+
+    renderTrainingPhotoPreviews();
+
+    const cameraInput = document.getElementById('cameraCaptureInput');
+    const galleryInput = document.getElementById('gallerySelectInput');
+    if (cameraInput) {
+        cameraInput.value = '';
+    }
+    if (galleryInput) {
+        galleryInput.value = '';
+    }
+}
+
+function removeTrainingPhoto(idx) {
+    const collector = document.getElementById('trainingPhotosCollector');
+    const summary = document.getElementById('training-photo-summary');
+    if (!collector || !summary) return;
+    const files = collector.files ? Array.from(collector.files) : [];
+    if (idx < 0 || idx >= files.length) return;
+    files.splice(idx, 1);
+    const dt = new DataTransfer();
+    files.forEach(file => dt.items.add(file));
+    collector.files = dt.files;
+    const total = collector.files.length;
+    summary.textContent = total === 0
+        ? 'Zatím nejsou vybrané žádné fotky.'
+        : (total === 1 ? 'Vybraná 1 fotka.' : ('Vybráno fotek: ' + total));
+    renderTrainingPhotoPreviews();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const completeForm = document.querySelector('#completeModal form[action$="training_complete.php"]');
+    const collector = document.getElementById('trainingPhotosCollector');
+    if (!completeForm || !collector) {
+        return;
+    }
+
+    renderTrainingPhotoPreviews();
+
+    completeForm.addEventListener('submit', function() {
+        // fallback kompatibilita: pokud je k dispozici i starý single input, necháme backend zpracovat collector
+    });
+});
 
 // Klávesa Enter v poli dopomoci = přidá sérii
 document.querySelectorAll('.series-assist').forEach(function(el) {

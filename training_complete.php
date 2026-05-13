@@ -16,26 +16,18 @@ $location  = normalizeTrainingVenueName($_POST['location'] ?? '');
 $notes     = trim($_POST['notes']    ?? '');
 $pdo       = getDB();
 
-$trainingPhoto = null;
-if (!empty($_FILES['training_photo']) && ($_FILES['training_photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-    $uploadErr = (int)($_FILES['training_photo']['error'] ?? UPLOAD_ERR_NO_FILE);
-    if ($uploadErr !== UPLOAD_ERR_OK) {
-        flash('danger', 'Fotografii se nepodařilo nahrát. Zkuste to prosím znovu.');
-        redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
-    }
-
-    $maxPhotoSize = 8 * 1024 * 1024;
-    if ((int)($_FILES['training_photo']['size'] ?? 0) > $maxPhotoSize) {
-        flash('danger', 'Fotografie je příliš velká. Maximum je 8 MB.');
-        redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
-    }
-
-    $trainingPhoto = resizeAndSavePhoto('training_photo', 'trainings');
-    if (!$trainingPhoto) {
-        flash('danger', 'Podporujeme pouze obrázky JPG, PNG, GIF nebo WEBP.');
-        redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
-    }
+$uploadedPhotos = [];
+try {
+    // 1) rychlá fotka přímo z kamery (zachované chování)
+    $uploadedPhotos = array_merge($uploadedPhotos, saveTrainingPhotosFromInput('training_photo', 'trainings'));
+    // 2) výběr více fotek z galerie
+    $uploadedPhotos = array_merge($uploadedPhotos, saveTrainingPhotosFromInput('training_photos', 'trainings'));
+} catch (RuntimeException $e) {
+    flash('danger', $e->getMessage());
+    redirect(BASE_URL . '/training_session.php?id=' . $sessionId);
 }
+
+$trainingPhoto = $uploadedPhotos[0] ?? null;
 
 // Ověření vlastnictví
 $stmt = $pdo->prepare(
@@ -63,8 +55,14 @@ try {
          SET completed_at = NOW(), location = ?, notes = ?, training_photo = ?
          WHERE id = ?'
     )->execute([$location ?: null, $notes ?: null, $trainingPhoto, $sessionId]);
+
+    if (!empty($uploadedPhotos)) {
+        addTrainingSessionPhotos($sessionId, $uploadedPhotos);
+    }
 } catch (Throwable $e) {
-    deleteUploadedPhoto($trainingPhoto, 'trainings');
+    foreach ($uploadedPhotos as $photo) {
+        deleteUploadedPhoto($photo, 'trainings');
+    }
     throw $e;
 }
 

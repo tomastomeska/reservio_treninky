@@ -26,6 +26,29 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
+$sessionPhotos = getTrainingSessionPhotos($sessionId);
+$mainPhotoFilename = (string)($session['training_photo'] ?? '');
+
+// Kompatibilita: starší tréninky mohly mít jen training_photo bez záznamu v galerii.
+$allSessionPhotos = $sessionPhotos;
+if ($mainPhotoFilename !== '') {
+    $hasMainInGallery = false;
+    foreach ($allSessionPhotos as $row) {
+        if ((string)($row['filename'] ?? '') === $mainPhotoFilename) {
+            $hasMainInGallery = true;
+            break;
+        }
+    }
+    if (!$hasMainInGallery) {
+        array_unshift($allSessionPhotos, [
+            'id' => 0,
+            'filename' => $mainPhotoFilename,
+            'sort_order' => 0,
+            'created_at' => $session['completed_at'] ?? $session['started_at'] ?? null,
+        ]);
+    }
+}
+
 // Načtení cviků v session snapshotu (fallback pro starší data)
 $exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
 
@@ -504,11 +527,13 @@ renderHeader('Detail tréninku');
 </div>
 <?php endif; ?>
 
-<?php if (!empty($session['training_photo'])): ?>
+<?php if (!empty($session['training_photo']) || !empty($allSessionPhotos)): ?>
 <div class="card border-0 shadow-sm mb-4" id="training-photo">
     <div class="card-header bg-dark text-white d-flex align-items-center">
         <span><i class="fas fa-camera me-2"></i>Fotografie z tréninku</span>
+        <span class="badge bg-light text-dark ms-2"><?= count($allSessionPhotos) ?></span>
         <div class="ms-auto d-flex gap-2">
+            <?php if (!empty($session['training_photo'])): ?>
             <!-- Změnit fotku -->
             <label class="btn btn-outline-warning btn-sm mb-0" title="Změnit fotografii">
                 <i class="fas fa-exchange-alt me-1"></i>Změnit
@@ -531,13 +556,66 @@ renderHeader('Detail tréninku');
                     <i class="fas fa-trash me-1"></i>Smazat
                 </button>
             </form>
+            <?php endif; ?>
         </div>
     </div>
-    <div class="card-body text-center">
-        <img src="<?= h(photoUrl($session['training_photo'], 'trainings')) ?>"
-             alt="Fotografie z tréninku"
-             class="img-fluid rounded"
-             style="max-height:500px; object-fit:contain;">
+    <div class="card-body">
+        <form method="post" action="<?= BASE_URL ?>/training_photo_update.php" enctype="multipart/form-data" class="mb-3">
+            <?= csrfField() ?>
+            <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+            <input type="hidden" name="action" value="add_gallery">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <input type="file" name="training_photos[]" id="addGalleryPhotosInput"
+                       accept="image/*" multiple class="d-none"
+                       onchange="previewAddGalleryPhotos(this)">
+                <label for="addGalleryPhotosInput" class="btn btn-outline-warning mb-0">
+                    <i class="fas fa-images me-1"></i>Přidat fotky z galerie
+                </label>
+                <span id="addGalleryPhotoCount" class="text-muted small fst-italic">Nejsou vybrány nové fotky</span>
+                <button type="submit" class="btn btn-outline-success">
+                    <i class="fas fa-upload me-1"></i>Nahrát vybrané
+                </button>
+            </div>
+            <div id="add-gallery-preview" class="small text-muted mt-2 d-none"></div>
+        </form>
+
+        <?php if (!empty($allSessionPhotos)): ?>
+        <div class="photo-gallery-grid">
+            <?php foreach ($allSessionPhotos as $photo): ?>
+            <?php
+            $filename = (string)($photo['filename'] ?? '');
+            $isMain = $filename !== '' && $filename === $mainPhotoFilename;
+            ?>
+            <div class="photo-gallery-item border rounded p-2 d-flex flex-column">
+                <a href="<?= h(photoUrl($filename, 'trainings')) ?>" target="_blank" rel="noopener noreferrer" class="d-block mb-2 photo-gallery-link">
+                    <img src="<?= h(photoUrl($filename, 'trainings')) ?>"
+                         alt="Fotografie z tréninku"
+                         class="img-fluid rounded photo-gallery-img">
+                </a>
+                <div class="d-flex align-items-center gap-2 mt-auto">
+                    <?php if ($isMain): ?>
+                    <span class="badge bg-warning text-dark">Hlavní fotka</span>
+                    <?php else: ?>
+                    <span class="badge bg-secondary">Galerie</span>
+                    <?php endif; ?>
+
+                    <?php if ((int)($photo['id'] ?? 0) > 0): ?>
+                    <form method="post" action="<?= BASE_URL ?>/training_photo_update.php" class="ms-auto"
+                          onsubmit="return confirm('Opravdu smazat tuto fotografii?');">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="session_id" value="<?= $sessionId ?>">
+                        <input type="hidden" name="action" value="delete_gallery">
+                        <input type="hidden" name="photo_id" value="<?= (int)$photo['id'] ?>">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="fas fa-trash me-1"></i>Smazat
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 <?php elseif ($session['completed_at']): ?>
@@ -549,18 +627,18 @@ renderHeader('Detail tréninku');
               enctype="multipart/form-data">
             <?= csrfField() ?>
             <input type="hidden" name="session_id" value="<?= $sessionId ?>">
-            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="action" value="add_gallery">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <input type="file" name="training_photo" id="addPhotoInput"
-                       accept="image/*" capture="environment"
+                <input type="file" name="training_photos[]" id="addPhotoInput"
+                       accept="image/*" multiple
                        class="d-none"
                        onchange="previewAddPhoto(this)">
                 <label for="addPhotoInput" class="btn btn-outline-warning mb-0">
-                    <i class="fas fa-camera me-1"></i>Nahrát / Vyfotit
+                    <i class="fas fa-images me-1"></i>Vybrat fotky
                 </label>
-                <span id="addPhotoName" class="text-muted small fst-italic">Soubor nevybrán</span>
+                <span id="addPhotoName" class="text-muted small fst-italic">Soubory nevybrány</span>
                 <button type="submit" class="btn btn-outline-success">
-                    <i class="fas fa-save me-1"></i>Uložit fotografii
+                    <i class="fas fa-save me-1"></i>Uložit fotografie
                 </button>
             </div>
             <img id="add-photo-preview" class="img-fluid rounded border mt-3 d-none"
@@ -574,7 +652,11 @@ function previewAddPhoto(input) {
     const nameSpan = document.getElementById('addPhotoName');
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
-    if (nameSpan) nameSpan.textContent = file.name;
+    if (nameSpan) {
+        nameSpan.textContent = input.files.length === 1
+            ? file.name
+            : ('Vybráno souborů: ' + input.files.length);
+    }
     if (!preview) return;
 
     // HEIC a jiné formáty nepodporované prohlížečem nelze zobrazit jako náhled
@@ -589,8 +671,54 @@ function previewAddPhoto(input) {
     reader.onload = e => { preview.src = e.target.result; preview.classList.remove('d-none'); };
     reader.readAsDataURL(file);
 }
+
+function previewAddGalleryPhotos(input) {
+    const countSpan = document.getElementById('addGalleryPhotoCount');
+    const previewInfo = document.getElementById('add-gallery-preview');
+    if (!countSpan || !previewInfo) {
+        return;
+    }
+
+    const files = input.files ? Array.from(input.files) : [];
+    if (files.length === 0) {
+        countSpan.textContent = 'Nejsou vybrány nové fotky';
+        previewInfo.classList.add('d-none');
+        previewInfo.textContent = '';
+        return;
+    }
+
+    countSpan.textContent = 'Vybráno souborů: ' + files.length;
+    previewInfo.classList.remove('d-none');
+    previewInfo.textContent = 'K nahrání je připraveno ' + files.length + ' fotografií.';
+}
 </script>
 <?php endif; ?>
+
+<style>
+.photo-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+}
+
+.photo-gallery-img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    background: #f4f4f5;
+}
+
+@media (max-width: 575.98px) {
+    .photo-gallery-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .photo-gallery-img {
+        height: 160px;
+    }
+}
+</style>
 
 <style>
 @media print {

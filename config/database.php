@@ -79,6 +79,20 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
     }
 
+    // Galerie fotek k tréninku (více fotek)
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `training_session_photos` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `session_id` INT NOT NULL,
+            `filename`   VARCHAR(255) NOT NULL,
+            `sort_order` INT NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_training_session_photos_session` (`session_id`),
+            CONSTRAINT `fk_training_session_photos_session`
+                FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
     // Golf metadata pro HCP výpočet
     $stmtGolfBefore = $pdo->query("SHOW COLUMNS FROM golf_sessions LIKE 'handicap_before'");
     if (!$stmtGolfBefore->fetch()) {

@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS `training_sessions` (
     FOREIGN KEY (`paired_session_id`) REFERENCES `paired_sessions`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Galerie fotek k tréninku (více fotek)
+CREATE TABLE IF NOT EXISTS `training_session_photos` (
+    `id`         INT AUTO_INCREMENT PRIMARY KEY,
+    `session_id` INT NOT NULL,
+    `filename`   VARCHAR(255) NOT NULL,
+    `sort_order` INT NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY `idx_training_session_photos_session` (`session_id`),
+    FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Katalog sportovišť a míst tréninku
 CREATE TABLE IF NOT EXISTS `training_venues` (
     `id`                  INT AUTO_INCREMENT PRIMARY KEY,
