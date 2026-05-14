@@ -31,17 +31,16 @@ $assist     = (int)($input['assistance_reps'] ?? 0);
 
 $pdo = getDB();
 
-// Ověření, že session patří trenérovi a je nedokončená
+// Ověření, že session patří trenérovi (bez omezení completed_at – umožnění editace po ukončení)
 $stmt = $pdo->prepare(
     'SELECT ts.id FROM training_sessions ts
      JOIN athletes a ON ts.athlete_id = a.id
     WHERE ts.id = ? AND a.coach_id = ?
-      AND ts.completed_at IS NULL
       AND ts.deleted_by_coach_at IS NULL'
 );
 $stmt->execute([$sessionId, $coachId]);
 if (!$stmt->fetch()) {
-    echo json_encode(['success' => false, 'error' => 'Trénink nenalezen nebo již dokončen']);
+    echo json_encode(['success' => false, 'error' => 'Trénink nenalezen']);
     exit;
 }
 

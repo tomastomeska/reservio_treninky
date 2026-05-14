@@ -10,7 +10,8 @@ $pdo     = getDB();
 
 // Načtení sportovců s doplňkovými info
 $stmt = $pdo->prepare(
-    'SELECT a.*,
+    'SELECT a.*, 
+            TIMESTAMPDIFF(YEAR, a.birth_date, CURDATE()) AS age,
             (SELECT COUNT(*) FROM training_sessions ts
                          WHERE ts.athlete_id = a.id
                              AND ts.completed_at IS NOT NULL
@@ -26,27 +27,29 @@ $stmt = $pdo->prepare(
                              AND ts3.completed_at IS NOT NULL
                              AND ts3.deleted_by_coach_at IS NULL
                          ORDER BY ts3.completed_at DESC LIMIT 1) AS last_set_name,
-                        (SELECT ts4.id FROM training_sessions ts4
+            (SELECT ts4.id FROM training_sessions ts4
                                                  WHERE ts4.athlete_id = a.id
                                                      AND ts4.completed_at IS NULL
                                                      AND ts4.deleted_by_coach_at IS NULL
                          ORDER BY ts4.started_at DESC LIMIT 1) AS active_session_id,
-                        (SELECT ts4.paired_session_id FROM training_sessions ts4
+            (SELECT ts4.paired_session_id FROM training_sessions ts4
                                                  WHERE ts4.athlete_id = a.id
                                                      AND ts4.completed_at IS NULL
                                                      AND ts4.deleted_by_coach_at IS NULL
                          ORDER BY ts4.started_at DESC LIMIT 1) AS active_paired_session_id,
-                        (SELECT ts4.started_at FROM training_sessions ts4
+            (SELECT ts4.started_at FROM training_sessions ts4
                                                  WHERE ts4.athlete_id = a.id
                                                      AND ts4.completed_at IS NULL
                                                      AND ts4.deleted_by_coach_at IS NULL
                          ORDER BY ts4.started_at DESC LIMIT 1) AS active_session_started_at,
-                        (SELECT ws.name FROM training_sessions ts4
-                         JOIN workout_sets ws ON ws.id = ts4.workout_set_id
+            (SELECT ws.name FROM training_sessions ts4
+             JOIN workout_sets ws ON ws.id = ts4.workout_set_id
                                                  WHERE ts4.athlete_id = a.id
                                                      AND ts4.completed_at IS NULL
                                                      AND ts4.deleted_by_coach_at IS NULL
-                         ORDER BY ts4.started_at DESC LIMIT 1) AS active_set_name
+                         ORDER BY ts4.started_at DESC LIMIT 1) AS active_set_name,
+            (SELECT w.weight_kg FROM athlete_weight_logs w WHERE w.athlete_id = a.id ORDER BY w.measured_at DESC LIMIT 1) AS current_weight,
+            (SELECT w.weight_kg FROM athlete_weight_logs w WHERE w.athlete_id = a.id ORDER BY w.measured_at ASC LIMIT 1) AS initial_weight
      FROM athletes a
      WHERE a.coach_id = ?
      ORDER BY a.last_name, a.first_name'
@@ -90,6 +93,12 @@ foreach ($activeSessions as $session) {
     }
 
     $activeIndividualSessions[] = $session;
+}
+
+// Kontrola a zobrazení obrázku sportovce
+$athletePhotoPath = BASE_URL . '/uploads/athletes/' . ($athlete['photo'] ?? 'default.jpg');
+if (!file_exists(__DIR__ . '/../uploads/athletes/' . ($athlete['photo'] ?? 'default.jpg'))) {
+    $athletePhotoPath = BASE_URL . '/uploads/athletes/default.jpg';
 }
 
 renderHeader('Dashboard');

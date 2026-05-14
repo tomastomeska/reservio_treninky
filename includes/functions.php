@@ -1283,6 +1283,58 @@ function sendMessageNotificationEmail(string $toEmail, string $coachName, string
     }
 }
 
+  /**
+   * Odešle sportovci výzvu k zadání aktuální tělesné hmotnosti přes bezpečný odkaz.
+   */
+  function sendAthleteWeightInviteEmail(
+    string $toEmail,
+    string $athleteName,
+    string $coachName,
+    string $entryUrl,
+    string $expiresAt
+  ): bool {
+    $phpmailerSrc = dirname(__DIR__) . '/vendor/phpmailer/phpmailer/src';
+    if (!file_exists($phpmailerSrc . '/PHPMailer.php')) {
+      return false;
+    }
+    require_once $phpmailerSrc . '/Exception.php';
+    require_once $phpmailerSrc . '/PHPMailer.php';
+    require_once $phpmailerSrc . '/SMTP.php';
+
+    $safeAthleteName = htmlspecialchars($athleteName, ENT_QUOTES, 'UTF-8');
+    $safeCoachName = htmlspecialchars($coachName, ENT_QUOTES, 'UTF-8');
+    $safeEntryUrl = htmlspecialchars($entryUrl, ENT_QUOTES, 'UTF-8');
+    $expiresText = formatDateTime($expiresAt);
+
+    $htmlBody = "<p>Ahoj <strong>{$safeAthleteName}</strong>,</p>"
+      . "<p>trenér <strong>{$safeCoachName}</strong> tě žádá o zadání aktuální tělesné hmotnosti.</p>"
+      . "<p><a href=\"{$safeEntryUrl}\" style=\"background:#0d6efd;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block\">"
+      . "Zadat aktuální hmotnost</a></p>"
+      . "<p>Odkaz je platný do <strong>" . htmlspecialchars($expiresText, ENT_QUOTES, 'UTF-8') . "</strong>.</p>"
+      . "<hr><p style=\"color:#777;font-size:.9em\">TrainerApp – automatická výzva</p>";
+
+    $altBody = "Ahoj {$athleteName},\n\n"
+      . "trenér {$coachName} tě žádá o zadání aktuální tělesné hmotnosti.\n"
+      . "Vyplň ji zde: {$entryUrl}\n"
+      . "Odkaz je platný do {$expiresText}.\n\n"
+      . "TrainerApp";
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+      _configureMail($mail);
+      $mail->addAddress($toEmail);
+      $mail->isHTML(true);
+      $mail->Subject = 'Výzva k zadání tělesné hmotnosti';
+      $mail->Body = $htmlBody;
+      $mail->AltBody = $altBody;
+      $mail->send();
+      return true;
+    } catch (\Exception $e) {
+      error_log('sendAthleteWeightInviteEmail error: ' . $mail->ErrorInfo . ' | ' . $e->getMessage());
+      return false;
+    }
+  }
+
 /**
  * Odešle testovací email. Vrátí 'ok' nebo chybovou zprávu.
  */

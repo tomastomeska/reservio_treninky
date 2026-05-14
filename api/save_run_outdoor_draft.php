@@ -51,15 +51,16 @@ if (!$run) {
 }
 
 $durationSeconds = max(0, (int)($input['duration_minutes'] ?? 0) * 60 + (int)($input['duration_seconds'] ?? 0));
-$distanceKm = max(0, (float)($input['distance_km'] ?? 0));
-$runType = (string)($input['run_type'] ?? 'free');
+$paceSecondsPerKm = max(0, (int)($input['pace_minutes'] ?? 0) * 60 + (int)($input['pace_seconds'] ?? 0));
+$distanceKm = $paceSecondsPerKm > 0
+    ? round($durationSeconds / $paceSecondsPerKm, 2)
+    : 0;
+$runType = 'free';
 $surface = (string)($input['surface'] ?? 'asphalt');
 $location = normalizeTrainingVenueName((string)($input['location'] ?? ''));
+$weather = trim((string)($input['weather'] ?? ''));
 $allowedRunTypes = ['free', 'intervals', 'tempo', 'race', 'recovery'];
 $allowedSurfaces = ['asphalt', 'trail', 'mixed'];
-if (!in_array($runType, $allowedRunTypes, true)) {
-    $runType = 'free';
-}
 if (!in_array($surface, $allowedSurfaces, true)) {
     $surface = 'asphalt';
 }
@@ -81,12 +82,13 @@ updateRunOutdoorSession(
     $distanceKm,
     $runType,
     $surface,
-    $maxSpeed,
+    $weather !== '' ? $weather : null,
+    null,
     $caloriesBurned,
-    $stepCount,
-    $rpe,
-    $tempoVariability,
-    $feeling !== '' ? $feeling : null
+    null,
+    null,
+    null,
+    null
 );
 
 $pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
@@ -103,7 +105,6 @@ if (is_array($splitsInput)) {
         $km = isset($split['km_marker']) && $split['km_marker'] !== '' ? (float)$split['km_marker'] : 0;
         $time = trim((string)($split['split_time'] ?? ''));
         $pace = trim((string)($split['pace'] ?? ''));
-        $maxAtKm = isset($split['max_speed_at_km']) && $split['max_speed_at_km'] !== '' ? (float)$split['max_speed_at_km'] : null;
 
         if ($km <= 0 || $time === '') {
             continue;
@@ -121,7 +122,6 @@ if (is_array($splitsInput)) {
             'km_marker' => $km,
             'split_time' => $time,
             'pace' => $pace !== '' ? $pace : null,
-            'max_speed_at_km' => $maxAtKm,
         ];
     }
 }

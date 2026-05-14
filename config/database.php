@@ -79,6 +79,11 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('ALTER TABLE training_sessions ADD COLUMN training_photo VARCHAR(255) NULL AFTER notes');
     }
 
+    $stmtOutdoorWeather = $pdo->query("SHOW COLUMNS FROM run_outdoor_sessions LIKE 'weather'");
+    if (!$stmtOutdoorWeather->fetch()) {
+        $pdo->exec('ALTER TABLE run_outdoor_sessions ADD COLUMN weather VARCHAR(120) NULL AFTER surface');
+    }
+
     // Galerie fotek k tréninku (více fotek)
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `training_session_photos` (
@@ -219,6 +224,22 @@ function ensureSchemaUpgrades(PDO $pdo): void {
                 FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE,
             CONSTRAINT `fk_tse_exercise`
                 FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `run_treadmill_splits` (
+            `id`              INT AUTO_INCREMENT PRIMARY KEY,
+            `run_session_id`  INT NOT NULL,
+            `km_marker`       DECIMAL(4,2) NOT NULL,
+            `split_time`      VARCHAR(10) NOT NULL,
+            `pace`            VARCHAR(10) NULL,
+            `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY `uniq_run_treadmill_split` (`run_session_id`, `km_marker`),
+            KEY `idx_run_treadmill_splits` (`run_session_id`),
+            CONSTRAINT `fk_run_treadmill_splits_session`
+                FOREIGN KEY (`run_session_id`) REFERENCES `run_treadmill_sessions`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
@@ -389,6 +410,43 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             FOREIGN KEY (`coach_id`)  REFERENCES `coaches`(`id`)          ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+
+    // Historie tělesné hmotnosti sportovců + výzvy přes bezpečný odkaz
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `athlete_weight_invites` (
+            `id`         INT AUTO_INCREMENT PRIMARY KEY,
+            `athlete_id` INT NOT NULL,
+            `coach_id`   INT NOT NULL,
+            `email`      VARCHAR(255) NOT NULL,
+            `token_hash` CHAR(64) NOT NULL,
+            `expires_at` DATETIME NOT NULL,
+            `used_at`    DATETIME NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY `uq_weight_invite_token_hash` (`token_hash`),
+            KEY `idx_weight_invites_athlete` (`athlete_id`),
+            KEY `idx_weight_invites_expires` (`expires_at`),
+            CONSTRAINT `fk_weight_invites_athlete` FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE,
+            CONSTRAINT `fk_weight_invites_coach` FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    $pdo->exec(" 
+        CREATE TABLE IF NOT EXISTS `athlete_weight_logs` (
+            `id`                  INT AUTO_INCREMENT PRIMARY KEY,
+            `athlete_id`          INT NOT NULL,
+            `measured_at`         DATE NOT NULL,
+            `weight_kg`           DECIMAL(5,2) NOT NULL,
+            `source`              ENUM('coach','athlete_link') NOT NULL DEFAULT 'coach',
+            `invite_id`           INT NULL,
+            `created_by_coach_id` INT NULL,
+            `created_at`          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_weight_logs_athlete_date` (`athlete_id`, `measured_at`),
+            KEY `idx_weight_logs_invite` (`invite_id`),
+            CONSTRAINT `fk_weight_logs_athlete` FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE,
+            CONSTRAINT `fk_weight_logs_invite` FOREIGN KEY (`invite_id`) REFERENCES `athlete_weight_invites`(`id`) ON DELETE SET NULL,
+            CONSTRAINT `fk_weight_logs_coach` FOREIGN KEY (`created_by_coach_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 }
 
 function normalizeTrainingVenueName(string $name): string {
@@ -451,6 +509,40 @@ function createRunTreadmillSession(int $sessionId, int $durationSeconds, float $
     ');
     $stmt->execute([$sessionId, $durationSeconds, $distanceKm]);
     return (int)$pdo->lastInsertId();
+}
+
+function saveRunTreadmillSplits(int $runSessionId, array $splits): void {
+    $pdo = getDB();
+    $pdo->prepare('DELETE FROM `run_treadmill_splits` WHERE `run_session_id` = ?')->execute([$runSessionId]);
+
+    if (empty($splits)) {
+        return;
+    }
+
+    $ins = $pdo->prepare(
+        'INSERT INTO `run_treadmill_splits` (`run_session_id`, `km_marker`, `split_time`, `pace`)
+         VALUES (?, ?, ?, ?)'
+    );
+
+    foreach ($splits as $split) {
+        $ins->execute([
+            $runSessionId,
+            (float)$split['km_marker'],
+            $split['split_time'],
+            $split['pace'] ?? null,
+        ]);
+    }
+}
+
+function getRunTreadmillSplits(int $runSessionId): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT * FROM `run_treadmill_splits`
+         WHERE `run_session_id` = ?
+         ORDER BY `km_marker` ASC'
+    );
+    $stmt->execute([$runSessionId]);
+    return $stmt->fetchAll();
 }
 
 /**
@@ -565,6 +657,7 @@ function updateRunOutdoorSession(
     float $distanceKm,
     string $runType,
     string $surface,
+    ?string $weather = null,
     ?float $maxSpeed = null,
     ?int $caloriesBurned = null,
     ?int $stepCount = null,
@@ -585,6 +678,7 @@ function updateRunOutdoorSession(
              `distance_km` = ?,
              `run_type` = ?,
              `surface` = ?,
+             `weather` = ?,
              `avg_pace` = ?,
              `max_speed` = ?,
              `calories_burned` = ?,
@@ -602,6 +696,7 @@ function updateRunOutdoorSession(
         max(0, $distanceKm),
         $runType,
         $surface,
+        $weather,
         $avgPace,
         $maxSpeed,
         $caloriesBurned,
@@ -1088,4 +1183,150 @@ function calculateGolfStats(int $athleteId, int $daysBack = 90): array {
         'total_score'    => (int)($row['total_score'] ?? 0),
         'total_par'      => (int)($row['total_par'] ?? 0),
     ];
+}
+
+// ============================================================
+// Tělesná hmotnost sportovců
+// ============================================================
+
+function addAthleteWeightLog(
+    int $athleteId,
+    string $measuredAt,
+    float $weightKg,
+    string $source = 'coach',
+    ?int $createdByCoachId = null,
+    ?int $inviteId = null
+): int {
+    $allowedSources = ['coach', 'athlete_link'];
+    if (!in_array($source, $allowedSources, true)) {
+        $source = 'coach';
+    }
+
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'INSERT INTO `athlete_weight_logs`
+            (`athlete_id`, `measured_at`, `weight_kg`, `source`, `invite_id`, `created_by_coach_id`)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $athleteId,
+        $measuredAt,
+        round($weightKg, 2),
+        $source,
+        $inviteId,
+        $createdByCoachId,
+    ]);
+
+    return (int)$pdo->lastInsertId();
+}
+
+function getAthleteWeightHistory(int $athleteId, int $limit = 365): array {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT `id`, `athlete_id`, `measured_at`, `weight_kg`, `source`, `invite_id`, `created_by_coach_id`, `created_at`
+         FROM `athlete_weight_logs`
+         WHERE `athlete_id` = ?
+         ORDER BY `measured_at` ASC, `id` ASC
+         LIMIT ?'
+    );
+    $stmt->execute([$athleteId, max(1, $limit)]);
+    return $stmt->fetchAll();
+}
+
+function getAthleteWeightStats(int $athleteId): array {
+    $history = getAthleteWeightHistory($athleteId, 2000);
+    if (empty($history)) {
+        return [
+            'entries' => 0,
+            'first_weight' => null,
+            'first_date' => null,
+            'current_weight' => null,
+            'current_date' => null,
+            'change_kg' => null,
+            'change_percent' => null,
+        ];
+    }
+
+    $first = $history[0];
+    $last = $history[count($history) - 1];
+    $firstWeight = (float)$first['weight_kg'];
+    $currentWeight = (float)$last['weight_kg'];
+    $changeKg = round($currentWeight - $firstWeight, 2);
+    $changePercent = $firstWeight > 0
+        ? round(($changeKg / $firstWeight) * 100, 1)
+        : null;
+
+    return [
+        'entries' => count($history),
+        'first_weight' => $firstWeight,
+        'first_date' => (string)$first['measured_at'],
+        'current_weight' => $currentWeight,
+        'current_date' => (string)$last['measured_at'],
+        'change_kg' => $changeKg,
+        'change_percent' => $changePercent,
+    ];
+}
+
+function createAthleteWeightInvite(int $athleteId, int $coachId, string $email, int $validHours = 72): array {
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+    $expiresAt = date('Y-m-d H:i:s', time() + (max(1, $validHours) * 3600));
+
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'INSERT INTO `athlete_weight_invites`
+            (`athlete_id`, `coach_id`, `email`, `token_hash`, `expires_at`)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $athleteId,
+        $coachId,
+        $email,
+        $tokenHash,
+        $expiresAt,
+    ]);
+
+    return [
+        'id' => (int)$pdo->lastInsertId(),
+        'token' => $token,
+        'expires_at' => $expiresAt,
+    ];
+}
+
+function getAthleteWeightInviteByToken(string $token): ?array {
+    if ($token === '') {
+        return null;
+    }
+
+    $tokenHash = hash('sha256', $token);
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'SELECT awi.*, a.first_name, a.last_name
+         FROM `athlete_weight_invites` awi
+         JOIN `athletes` a ON a.id = awi.athlete_id
+         WHERE awi.token_hash = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$tokenHash]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+
+    $isExpired = strtotime((string)$row['expires_at']) < time();
+    if ($isExpired || !empty($row['used_at'])) {
+        return null;
+    }
+
+    return $row;
+}
+
+function markAthleteWeightInviteUsed(int $inviteId): void {
+    $pdo = getDB();
+    $stmt = $pdo->prepare(
+        'UPDATE `athlete_weight_invites`
+         SET `used_at` = NOW()
+         WHERE `id` = ? AND `used_at` IS NULL'
+    );
+    $stmt->execute([$inviteId]);
 }

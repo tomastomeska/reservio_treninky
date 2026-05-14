@@ -20,6 +20,64 @@ if (!$athlete) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
+        flash('danger', 'Neplatný bezpečnostní token.');
+        redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
+    }
+
+    $action = (string)($_POST['action'] ?? '');
+    if ($action === 'save_weight') {
+        $weightInput = str_replace(',', '.', trim((string)($_POST['weight_kg'] ?? '')));
+        $measuredAt = preg_replace('/[^0-9\-]/', '', (string)($_POST['measured_at'] ?? date('Y-m-d')));
+        $weightKg = is_numeric($weightInput) ? (float)$weightInput : 0.0;
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $measuredAt)) {
+            flash('danger', 'Zadejte platné datum vážení.');
+        } elseif ($weightKg < 20 || $weightKg > 400) {
+            flash('danger', 'Zadejte platnou hmotnost v kg.');
+        } else {
+            addAthleteWeightLog($athleteId, $measuredAt, $weightKg, 'coach', $coachId, null);
+            flash('success', 'Tělesná hmotnost byla uložena.');
+        }
+
+        redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
+    }
+
+    if ($action === 'send_weight_invite') {
+        if (empty($athlete['email'])) {
+            flash('danger', 'Sportovec nemá vyplněný e-mail.');
+            redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
+        }
+
+        $invite = createAthleteWeightInvite($athleteId, $coachId, (string)$athlete['email'], 72);
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+        $baseUrlAbsolute = $host !== '' ? ($scheme . '://' . $host . BASE_URL) : BASE_URL;
+        $inviteUrl = rtrim($baseUrlAbsolute, '/') . '/athlete_weight_entry.php?token=' . urlencode((string)$invite['token']);
+
+        $coach = getCurrentCoach();
+        $coachName = ($coach['name'] ?? '') !== '' ? (string)$coach['name'] : (string)($coach['username'] ?? 'Váš trenér');
+        $athleteName = trim((string)$athlete['first_name'] . ' ' . (string)$athlete['last_name']);
+
+        $sent = sendAthleteWeightInviteEmail(
+            (string)$athlete['email'],
+            $athleteName,
+            $coachName,
+            $inviteUrl,
+            (string)$invite['expires_at']
+        );
+
+        if ($sent) {
+            flash('success', 'Výzva k zadání hmotnosti byla odeslána na e-mail sportovce.');
+        } else {
+            flash('danger', 'E-mail s výzvou se nepodařilo odeslat.');
+        }
+
+        redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
+    }
+}
+
 // Tréninkové záznamy sportovce
 $stmt = $pdo->prepare(
     'SELECT ts.*, ws.name AS set_name,
@@ -31,6 +89,62 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$athleteId]);
 $sessions = $stmt->fetchAll();
+
+$weightHistory = getAthleteWeightHistory($athleteId, 500);
+$weightStats = getAthleteWeightStats($athleteId);
+
+// Přidání aktuální váhy a indikace vývoje
+$currentWeight = $weightStats['current_weight'] ?? null;
+$initialWeight = $weightStats['initial_weight'] ?? null;
+$lastUpdated = $weightStats['last_updated'] ?? null;
+$weightTrend = null;
+
+if ($currentWeight !== null && $initialWeight !== null) {
+    if ($currentWeight > $initialWeight) {
+        $weightTrend = 'up';
+    } elseif ($currentWeight < $initialWeight) {
+        $weightTrend = 'down';
+    }
+}
+
+$weightWarning = null;
+if ($lastUpdated !== null) {
+    $daysSinceUpdate = (new DateTime())->diff(new DateTime($lastUpdated))->days;
+    if ($daysSinceUpdate > 7) {
+        $weightWarning = 'Váha nebyla aktualizována déle než 7 dní.';
+    }
+}
+
+// Zobrazení váhy pouze v detailu sportovce
+if ($currentWeight !== null) {
+    echo '<div class="weight-info">';
+    echo '<strong>Aktuální váha:</strong> ' . h($currentWeight) . ' kg';
+    if ($weightTrend === 'up') {
+        echo ' <span class="text-danger">&uarr;</span>';
+    } elseif ($weightTrend === 'down') {
+        echo ' <span class="text-success">&darr;</span>';
+    }
+    echo '</div>';
+}
+
+if ($weightWarning !== null) {
+    echo '<div class="alert alert-warning">' . h($weightWarning) . '</div>';
+}
+
+// Historie tréninků
+$stmt = $pdo->prepare(
+    'SELECT ts.*, ws.name AS set_name,
+            (SELECT COUNT(*) FROM session_series ss WHERE ss.session_id = ts.id) AS total_series
+     FROM training_sessions ts
+     JOIN workout_sets ws ON ts.workout_set_id = ws.id
+    WHERE ts.athlete_id = ? AND ts.deleted_by_coach_at IS NULL
+     ORDER BY ts.started_at DESC'
+);
+$stmt->execute([$athleteId]);
+$sessions = $stmt->fetchAll();
+
+$weightHistory = getAthleteWeightHistory($athleteId, 500);
+$weightStats = getAthleteWeightStats($athleteId);
 
 // Poslední trénink
 $lastSession = null;
@@ -64,7 +178,7 @@ $stmtSets = $pdo->prepare(
 $stmtSets->execute([$coachId]);
 $workoutSets = $stmtSets->fetchAll();
 
-renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
+renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']), true);
 ?>
 
 <div class="d-flex align-items-center mb-4 gap-3 page-header">
@@ -137,6 +251,44 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                         <td><span class="badge bg-warning text-dark"><?= count(array_filter($sessions, fn($s) => $s['completed_at'])) ?>×</span></td>
                     </tr>
                     <tr>
+                        <td class="text-muted fw-semibold">Počáteční váha</td>
+                        <td>
+                            <?php if ($weightStats['first_weight'] !== null): ?>
+                                <?= number_format((float)$weightStats['first_weight'], 1, ',', '') ?> kg
+                                <small class="text-muted d-block"><?= formatDate((string)$weightStats['first_date']) ?></small>
+                            <?php else: ?>
+                                –
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted fw-semibold">Aktuální váha</td>
+                        <td>
+                            <?php if ($weightStats['current_weight'] !== null): ?>
+                                <?= number_format((float)$weightStats['current_weight'], 1, ',', '') ?> kg
+                                <small class="text-muted d-block"><?= formatDate((string)$weightStats['current_date']) ?></small>
+                            <?php else: ?>
+                                –
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted fw-semibold">Pokrok od startu</td>
+                        <td>
+                            <?php if ($weightStats['change_kg'] !== null): ?>
+                                <?php $delta = (float)$weightStats['change_kg']; ?>
+                                <span class="badge <?= $delta <= 0 ? 'bg-success' : 'bg-danger' ?>">
+                                    <?= $delta > 0 ? '+' : '' ?><?= number_format($delta, 1, ',', '') ?> kg
+                                </span>
+                                <?php if ($weightStats['change_percent'] !== null): ?>
+                                    <small class="text-muted d-block"><?= $weightStats['change_percent'] > 0 ? '+' : '' ?><?= number_format((float)$weightStats['change_percent'], 1, ',', '') ?> %</small>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                –
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
                         <td class="text-muted fw-semibold">Přidán</td>
                         <td><?= formatDate($athlete['created_at']) ?></td>
                     </tr>
@@ -198,6 +350,71 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
                         <i class="fas fa-play me-1"></i>Zahájit trénink
                     </button>
                 </form>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-weight-scale me-2"></i>Tělesná hmotnost
+            </div>
+            <div class="card-body">
+                <form method="post" class="mb-3">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="save_weight">
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Datum vážení</label>
+                        <input type="date" name="measured_at" class="form-control"
+                               value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Aktuální váha (kg)</label>
+                        <input type="number" name="weight_kg" class="form-control"
+                               min="20" max="400" step="0.1"
+                               value="<?= $weightStats['current_weight'] !== null ? h((string)$weightStats['current_weight']) : '' ?>"
+                               placeholder="např. 78.4" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                        <i class="fas fa-save me-1"></i>Uložit váhu
+                    </button>
+                </form>
+
+                <?php if (!empty($athlete['email'])): ?>
+                <form method="post">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="send_weight_invite">
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-envelope me-1"></i>Odeslat výzvu k zadání váhy
+                    </button>
+                    <small class="text-muted d-block mt-2">Sportovec obdrží e-mail s bezpečným odkazem pro jednorázové zadání.</small>
+                </form>
+                <?php else: ?>
+                <div class="alert alert-warning py-2 mb-0">
+                    Sportovec nemá vyplněný e-mail, výzvu nelze odeslat.
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-line me-2"></i>Vývoj hmotnosti</span>
+                <span class="badge bg-light text-dark"><?= (int)$weightStats['entries'] ?> záznamů</span>
+            </div>
+            <div class="card-body">
+                <?php if (empty($weightHistory)): ?>
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-chart-area fa-2x mb-2 d-block"></i>
+                    Zatím nejsou evidované žádné záznamy hmotnosti.
+                </div>
+                <?php else: ?>
+                <canvas id="athleteWeightChart" style="max-height:340px"></canvas>
                 <?php endif; ?>
             </div>
         </div>
@@ -408,6 +625,13 @@ renderHeader(h($athlete['first_name'] . ' ' . $athlete['last_name']));
 
 <script>
 let forceSingleDeleteSubmit = false;
+const weightHistoryData = <?= json_encode(array_map(
+    static fn(array $row): array => [
+        'label' => formatDate((string)$row['measured_at']),
+        'weight' => (float)$row['weight_kg'],
+    ],
+    $weightHistory
+), JSON_UNESCAPED_UNICODE) ?>;
 
 function getTrainingChecks() {
     return Array.from(document.querySelectorAll('.training-bulk-check'));
@@ -452,6 +676,47 @@ function confirmBulkDeleteTrainings() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    const weightCanvas = document.getElementById('athleteWeightChart');
+    if (weightCanvas && Array.isArray(weightHistoryData) && weightHistoryData.length > 0 && window.Chart) {
+        new Chart(weightCanvas, {
+            type: 'line',
+            data: {
+                labels: weightHistoryData.map((p) => p.label),
+                datasets: [{
+                    label: 'Hmotnost (kg)',
+                    data: weightHistoryData.map((p) => p.weight),
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13,110,253,0.15)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: (value) => value + ' kg',
+                        },
+                    },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ' ' + ctx.parsed.y + ' kg',
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     const checks = getTrainingChecks();
     const toggleAllBtn = document.getElementById('toggleSelectTrainings');
     const checkAllCurrent = document.getElementById('checkAllCurrent');

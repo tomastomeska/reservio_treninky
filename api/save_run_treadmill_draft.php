@@ -54,10 +54,41 @@ $durationSeconds = max(0, (int)($input['duration_minutes'] ?? 0) * 60 + (int)($i
 $paceSecondsPerKm = max(0, (int)($input['pace_minutes'] ?? 0) * 60 + (int)($input['pace_seconds'] ?? 0));
 $distanceKm = $paceSecondsPerKm > 0
     ? round($durationSeconds / $paceSecondsPerKm, 2)
-    : max(0, (float)($input['distance_km'] ?? 0));
+    : 0;
 $caloriesBurned = ($input['calories_burned'] ?? '') !== '' ? (int)$input['calories_burned'] : null;
 $location = normalizeTrainingVenueName((string)($input['location'] ?? ''));
-$feeling = trim((string)($input['feeling'] ?? ''));
+$splitsInput = $input['splits'] ?? [];
+$splits = [];
+
+if (is_array($splitsInput)) {
+    foreach ($splitsInput as $split) {
+        if (!is_array($split)) {
+            continue;
+        }
+
+        $km = isset($split['km_marker']) && $split['km_marker'] !== '' ? (float)$split['km_marker'] : 0;
+        $time = trim((string)($split['split_time'] ?? ''));
+        $pace = trim((string)($split['pace'] ?? ''));
+
+        if ($km <= 0 || $time === '') {
+            continue;
+        }
+
+        if (!preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+            continue;
+        }
+
+        if ($pace !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $pace)) {
+            $pace = '';
+        }
+
+        $splits[] = [
+            'km_marker' => $km,
+            'split_time' => $time,
+            'pace' => $pace !== '' ? $pace : null,
+        ];
+    }
+}
 
 if ($location !== '') {
     rememberTrainingVenue($location, $coachId);
@@ -69,11 +100,13 @@ updateRunTreadmillSession(
     $distanceKm,
     $caloriesBurned,
     $location !== '' ? $location : null,
-    $feeling !== '' ? $feeling : null
+    null
 );
 
 $pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
     ->execute([$location !== '' ? $location : null, $sessionId]);
+
+saveRunTreadmillSplits((int)$run['id'], $splits);
 
 echo json_encode([
     'success' => true,

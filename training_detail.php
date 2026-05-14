@@ -7,6 +7,7 @@ requireLogin();
 
 $coachId   = getCurrentCoachId();
 $sessionId = intParam($_GET, 'id');
+$editMode  = (int)($_GET['edit'] ?? 0) === 1;
 $pdo       = getDB();
 
 // Načtení session
@@ -118,6 +119,20 @@ renderHeader('Detail tréninku');
         <?php endif; ?>
     </div>
     <div class="ms-auto d-flex gap-2 flex-wrap training-detail-actions">
+        <?php if ($session['completed_at']): ?>
+            <?php if ($editMode): ?>
+            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $sessionId ?>"
+               class="btn btn-outline-secondary btn-sm"
+               onclick="allowEditModeLeave = true;">
+                <i class="fas fa-lock me-1"></i>Ukončit editaci
+            </a>
+            <?php else: ?>
+            <a href="<?= BASE_URL ?>/training_detail.php?id=<?= $sessionId ?>&edit=1"
+               class="btn btn-outline-warning btn-sm">
+                <i class="fas fa-edit me-1"></i>Editovat
+            </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <a href="<?= BASE_URL ?>/export_csv.php?session_id=<?= $sessionId ?>"
            class="btn btn-outline-success btn-sm">
             <i class="fas fa-file-excel me-1"></i>Export CSV
@@ -485,11 +500,12 @@ renderHeader('Detail tréninku');
                         <th>Opakování</th>
                         <th>Dopomoc</th>
                         <th>Objem</th>
+                        <?php if ($editMode): ?><th style="width:50px"></th><?php endif; ?>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="series-body-<?= $ex['exercise_id'] ?>">
                     <?php foreach ($series as $s): ?>
-                    <tr>
+                    <tr id="series-row-<?= $s['id'] ?>">
                         <td class="fw-bold text-muted"><?= $s['series_order'] ?></td>
                         <td class="fw-bold"><?= number_format($s['weight'], 1, ',', '') ?> kg</td>
                         <td><?= $s['reps'] ?></td>
@@ -501,6 +517,15 @@ renderHeader('Detail tréninku');
                             <?php endif; ?>
                         </td>
                         <td class="text-muted"><?= number_format($s['weight'] * $s['reps'], 0, ',', '') ?></td>
+                        <?php if ($editMode): ?>
+                        <td>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="deleteSeries(<?= $s['id'] ?>, <?= $ex['exercise_id'] ?>)"
+                                    title="Smazat sérii">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </td>
+                        <?php endif; ?>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -513,6 +538,45 @@ renderHeader('Detail tréninku');
                     </tr>
                 </tfoot>
             </table>
+        </div>
+        <?php endif; ?>
+        <!-- Formulář pro editaci sérií -->
+        <?php if ($editMode): ?>
+        <div class="p-3 border-top bg-light">
+            <!-- Přidání nové série -->
+            <div class="add-series-row" id="add-series-form-<?= $ex['exercise_id'] ?>">
+                <h6 class="fw-bold mb-2 text-muted">Přidat sérii</h6>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">Váha (kg)</label>
+                        <input type="number" step="0.5" min="0" max="999"
+                               class="form-control form-control-sm series-weight"
+                               id="weight-<?= $ex['exercise_id'] ?>"
+                               placeholder="80" style="width:90px">
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">Opakování</label>
+                        <input type="number" step="1" min="0" max="999"
+                               class="form-control form-control-sm series-reps"
+                               id="reps-<?= $ex['exercise_id'] ?>"
+                               placeholder="10" style="width:90px">
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold mb-1">Dopomoc</label>
+                        <input type="number" step="1" min="0" max="999"
+                               class="form-control form-control-sm series-assist"
+                               id="assist-<?= $ex['exercise_id'] ?>"
+                               placeholder="0" style="width:80px">
+                    </div>
+                    <div>
+                        <button type="button"
+                                class="btn btn-warning fw-bold"
+                                onclick="addSeries(<?= $ex['exercise_id'] ?>, <?= $sessionId ?>)">
+                            <i class="fas fa-plus me-1"></i>Přidat
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
         <?php endif; ?>
     </div>
@@ -646,7 +710,20 @@ renderHeader('Detail tréninku');
         </form>
     </div>
 </div>
+    <?php endif; ?>
 <script>
+const isEditMode = <?= $editMode ? 'true' : 'false' ?>;
+let allowEditModeLeave = false;
+
+window.addEventListener('beforeunload', function (event) {
+    if (!isEditMode || allowEditModeLeave) {
+        return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+});
+
 function previewAddPhoto(input) {
     const preview  = document.getElementById('add-photo-preview');
     const nameSpan = document.getElementById('addPhotoName');
@@ -691,8 +768,78 @@ function previewAddGalleryPhotos(input) {
     previewInfo.classList.remove('d-none');
     previewInfo.textContent = 'K nahrání je připraveno ' + files.length + ' fotografií.';
 }
+
+// Přidání série
+function addSeries(exerciseId, sessionId) {
+    const weightInput = document.getElementById('weight-' + exerciseId);
+    const repsInput   = document.getElementById('reps-' + exerciseId);
+    const assistInput = document.getElementById('assist-' + exerciseId);
+
+    const weight = parseFloat(weightInput.value) || 0;
+    const reps   = parseInt(repsInput.value) || 0;
+    const assist = parseInt(assistInput.value) || 0;
+
+    if (weight <= 0 && reps <= 0) {
+        alert('Zadej alespoň váhu nebo opakování');
+        return;
+    }
+
+    const seriesOrderInput = document.querySelector('#series-body-' + exerciseId + ' tr:last-child td:first-child');
+    let seriesOrder = seriesOrderInput ? parseInt(seriesOrderInput.textContent) + 1 : 1;
+
+    const payload = {
+        session_id: sessionId,
+        exercise_id: exerciseId,
+        series_order: seriesOrder,
+        weight: weight,
+        reps: reps,
+        assistance_reps: assist
+    };
+    
+    fetch('<?= BASE_URL ?>/api/save_series.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Zůstaň v režimu editace, dokud uživatel ručně neukončí editaci.
+            allowEditModeLeave = true;
+            window.location.href = '<?= BASE_URL ?>/training_detail.php?id=' + sessionId + '&edit=1';
+        } else {
+            alert('Chyba: ' + (data.error || 'Neznámá chyba'));
+        }
+    })
+    .catch(err => {
+        alert('Chyba: ' + err.message);
+    });
+}
+
+// Smazání série
+function deleteSeries(seriesId, exerciseId) {
+    if (!confirm('Opravdu smazat sérii?')) return;
+
+    fetch('<?= BASE_URL ?>/api/delete_series.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ series_id: seriesId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const row = document.getElementById('series-row-' + seriesId);
+            if (row) row.remove();
+            // Zůstaň v režimu editace, dokud uživatel ručně neukončí editaci.
+            allowEditModeLeave = true;
+            window.location.href = '<?= BASE_URL ?>/training_detail.php?id=<?= $sessionId ?>&edit=1';
+        } else {
+            alert('Chyba: ' + (data.error || 'Neznámá chyba'));
+        }
+    })
+    .catch(err => alert('Chyba: ' + err.message));
+}
 </script>
-<?php endif; ?>
 
 <style>
 .photo-gallery-grid {

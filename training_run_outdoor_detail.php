@@ -36,6 +36,12 @@ if (!$runOutdoor) {
     createRunOutdoorSession($sessionId);
     $runOutdoor = getRunOutdoorSessionByTrainingSession($sessionId);
 }
+$outdoorPaceSeconds = 0;
+if ((int)$runOutdoor['duration_seconds'] > 0 && (float)$runOutdoor['distance_km'] > 0) {
+    $outdoorPaceSeconds = (int)round((int)$runOutdoor['duration_seconds'] / (float)$runOutdoor['distance_km']);
+}
+$outdoorPaceMinutesValue = $outdoorPaceSeconds > 0 ? intdiv($outdoorPaceSeconds, 60) : 0;
+$outdoorPaceSecondsValue = $outdoorPaceSeconds > 0 ? $outdoorPaceSeconds % 60 : 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
     if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
@@ -44,29 +50,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     }
 
     $durationSeconds = intParam($_POST, 'duration_minutes', 0) * 60 + intParam($_POST, 'duration_seconds', 0);
-    $distanceKm = (float)($_POST['distance_km'] ?? 0);
-    $runType = (string)($_POST['run_type'] ?? 'free');
+    $paceSeconds = intParam($_POST, 'pace_minutes', 0) * 60 + intParam($_POST, 'pace_seconds', 0);
+    $distanceKm = $paceSeconds > 0 ? round($durationSeconds / $paceSeconds, 2) : 0;
     $surface = (string)($_POST['surface'] ?? 'asphalt');
     $location = normalizeTrainingVenueName($_POST['location'] ?? '');
+    $weather = trim((string)($_POST['weather'] ?? ''));
 
-    $allowedRunTypes = ['free', 'intervals', 'tempo', 'race', 'recovery'];
     $allowedSurfaces = ['asphalt', 'trail', 'mixed'];
-    if (!in_array($runType, $allowedRunTypes, true)) {
-        $runType = 'free';
-    }
     if (!in_array($surface, $allowedSurfaces, true)) {
         $surface = 'asphalt';
     }
 
-    $maxSpeed = $_POST['max_speed'] !== '' ? (float)$_POST['max_speed'] : null;
     $caloriesBurned = $_POST['calories_burned'] !== '' ? (int)$_POST['calories_burned'] : null;
-    $stepCount = $_POST['step_count'] !== '' ? (int)$_POST['step_count'] : null;
-    $rpe = $_POST['rpe'] !== '' ? (int)$_POST['rpe'] : null;
-    $tempoVariability = $_POST['tempo_variability'] !== '' ? (float)$_POST['tempo_variability'] : null;
-    $feeling = trim($_POST['feeling'] ?? '');
+    $splitKm = $_POST['split_km'] ?? [];
+    $splitTime = $_POST['split_time'] ?? [];
+    $splitPace = $_POST['split_pace'] ?? [];
 
-    if ($durationSeconds < 0 || $distanceKm < 0) {
-        flash('danger', 'Čas a vzdálenost nesmí být záporné.');
+    if ($durationSeconds <= 0 || $paceSeconds <= 0) {
+        flash('danger', 'Vyplňte dobu běhu a průměrné tempo.');
         redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
     }
 
@@ -74,27 +75,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         rememberTrainingVenue($location, $coachId);
     }
 
-    updateRunOutdoorSession(
-        (int)$runOutdoor['id'],
-        $durationSeconds,
-        $distanceKm,
-        $runType,
-        $surface,
-        $maxSpeed,
-        $caloriesBurned,
-        $stepCount,
-        $rpe,
-        $tempoVariability,
-        $feeling !== '' ? $feeling : null
-    );
+        updateRunOutdoorSession(
+            (int)$runOutdoor['id'],
+            $durationSeconds,
+            $distanceKm,
+            'free',
+            $surface,
+            $weather !== '' ? $weather : null,
+            null,
+            $caloriesBurned,
+            null,
+            null,
+            null,
+            null
+        );
 
     $pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
         ->execute([$location !== '' ? $location : null, $sessionId]);
-
-    $splitKm = $_POST['split_km'] ?? [];
-    $splitTime = $_POST['split_time'] ?? [];
-    $splitPace = $_POST['split_pace'] ?? [];
-    $splitMaxSpeed = $_POST['split_max_speed'] ?? [];
 
     $splits = [];
     $rows = max(count($splitKm), count($splitTime));
@@ -102,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $km = isset($splitKm[$i]) && $splitKm[$i] !== '' ? (float)$splitKm[$i] : 0;
         $time = trim((string)($splitTime[$i] ?? ''));
         $pace = trim((string)($splitPace[$i] ?? ''));
-        $maxAtKm = isset($splitMaxSpeed[$i]) && $splitMaxSpeed[$i] !== '' ? (float)$splitMaxSpeed[$i] : null;
 
         if ($km <= 0 || $time === '') {
             continue;
@@ -120,7 +116,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'km_marker' => $km,
             'split_time' => $time,
             'pace' => $pace ?: null,
-            'max_speed_at_km' => $maxAtKm,
         ];
     }
 
@@ -158,138 +153,106 @@ renderHeader('Běh venku - detail');
                 <i class="fas fa-person-hiking me-2"></i>Běh venku
             </div>
             <div class="card-body">
-                <div class="mb-3 p-3 bg-light rounded">
-                    <strong><?= h($session['first_name']) ?> <?= h($session['last_name']) ?></strong><br>
-                    <small class="text-muted">Sada: <?= h($session['set_name']) ?></small>
+                <div class="run-form-topbar mb-4">
+                    <div>
+                        <div class="text-uppercase text-muted small fw-semibold">Záznam běhu</div>
+                        <div class="fs-5 fw-bold"><?= h($session['first_name']) ?> <?= h($session['last_name']) ?></div>
+                        <div class="text-muted small">Sada: <?= h($session['set_name']) ?></div>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-success text-white px-3 py-2">Outdoor detail</div>
+                        <div class="small text-muted mt-2">Vyplň čas, tempo a ulož</div>
+                    </div>
                 </div>
 
                 <form method="post" novalidate id="run-outdoor-form">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="save">
 
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Doba (min)</label>
-                                <input type="number" class="form-control" name="duration_minutes"
-                                       min="0" value="<?= intdiv((int)$runOutdoor['duration_seconds'], 60) ?>">
-                            </div>
+                    <div class="card border-0 shadow-sm mb-3 run-section-card">
+                        <div class="card-header bg-white border-0 pb-0">
+                            <div class="run-section-kicker">Běh</div>
+                            <h5 class="mb-0">Čas a tempo</h5>
                         </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Sekundy</label>
-                                <input type="number" class="form-control" name="duration_seconds"
-                                       min="0" max="59" value="<?= ((int)$runOutdoor['duration_seconds']) % 60 ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Vzdálenost (km)</label>
-                                <input type="number" class="form-control" name="distance_km" step="0.01" min="0"
-                                       value="<?= h((string)$runOutdoor['distance_km']) ?>">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Typ běhu</label>
-                                <select class="form-select" name="run_type">
-                                    <option value="free" <?= $runOutdoor['run_type'] === 'free' ? 'selected' : '' ?>>Volný</option>
-                                    <option value="intervals" <?= $runOutdoor['run_type'] === 'intervals' ? 'selected' : '' ?>>Intervaly</option>
-                                    <option value="tempo" <?= $runOutdoor['run_type'] === 'tempo' ? 'selected' : '' ?>>Tempo</option>
-                                    <option value="race" <?= $runOutdoor['run_type'] === 'race' ? 'selected' : '' ?>>Závod</option>
-                                    <option value="recovery" <?= $runOutdoor['run_type'] === 'recovery' ? 'selected' : '' ?>>Regenerační</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Povrch</label>
-                                <select class="form-select" name="surface">
-                                    <option value="asphalt" <?= $runOutdoor['surface'] === 'asphalt' ? 'selected' : '' ?>>Asfalt</option>
-                                    <option value="trail" <?= $runOutdoor['surface'] === 'trail' ? 'selected' : '' ?>>Terén</option>
-                                    <option value="mixed" <?= $runOutdoor['surface'] === 'mixed' ? 'selected' : '' ?>>Mix</option>
-                                </select>
+                        <div class="card-body pt-3">
+                            <div class="row g-3">
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label fw-semibold">Doba min</label>
+                                    <input type="number" class="form-control" name="duration_minutes"
+                                           min="0" value="<?= intdiv((int)$runOutdoor['duration_seconds'], 60) ?>" required>
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label fw-semibold">Doba sek</label>
+                                    <input type="number" class="form-control" name="duration_seconds"
+                                           min="0" max="59" value="<?= ((int)$runOutdoor['duration_seconds']) % 60 ?>" required>
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label fw-semibold">Tempo min/km</label>
+                                    <input type="number" class="form-control" name="pace_minutes" min="0" value="<?= $outdoorPaceMinutesValue ?>" required>
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label fw-semibold">Tempo sek</label>
+                                    <input type="number" class="form-control" name="pace_seconds" min="0" max="59" value="<?= $outdoorPaceSecondsValue ?>" required>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label fw-semibold">Kalorie</label>
+                                    <input type="number" class="form-control" name="calories_burned" min="0"
+                                           value="<?= h((string)($runOutdoor['calories_burned'] ?? '')) ?>">
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Místo</label>
-                                <?php
-                                $currentOutdoorLocation = (string)($session['location'] ?? '');
-                                $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues);
-                                $isCustomOutdoorLocation = $currentOutdoorLocation !== '' && !in_array($currentOutdoorLocation, $knownVenueNames, true);
-                                ?>
-                                <select class="form-select mb-2" id="run-outdoor-location-select">
-                                    <option value="">- Bez místa -</option>
-                                    <?php foreach ($trainingVenues as $venue): ?>
-                                    <?php $venueName = (string)$venue['name']; ?>
-                                    <option value="<?= h($venueName) ?>" <?= $venueName === $currentOutdoorLocation ? 'selected' : '' ?>>
-                                        <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                    <option value="__custom__" <?= $isCustomOutdoorLocation ? 'selected' : '' ?>>Jiné místo (zadat ručně)</option>
-                                </select>
-                                <input type="text" class="form-control" name="location"
-                                       id="run-outdoor-location-input"
-                                       value="<?= h($currentOutdoorLocation) ?>"
-                                       placeholder="Napište nové místo..."
-                                       <?= $isCustomOutdoorLocation ? '' : 'readonly' ?>>
-                                <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
-                            </div>
+                    <div class="card border-0 shadow-sm mb-3 run-section-card">
+                        <div class="card-header bg-white border-0 pb-0">
+                            <div class="run-section-kicker">Detaily</div>
+                            <h5 class="mb-0">Místo, povrch a počasí</h5>
                         </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Max rychlost (km/h)</label>
-                                <input type="number" class="form-control" name="max_speed" step="0.1" min="0"
-                                       value="<?= h((string)($runOutdoor['max_speed'] ?? '')) ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Kalorie</label>
-                                <input type="number" class="form-control" name="calories_burned" min="0"
-                                       value="<?= h((string)($runOutdoor['calories_burned'] ?? '')) ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Kroky</label>
-                                <input type="number" class="form-control" name="step_count" min="0"
-                                       value="<?= h((string)($runOutdoor['step_count'] ?? '')) ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">RPE (1-10)</label>
-                                <input type="number" class="form-control" name="rpe" min="1" max="10"
-                                       value="<?= h((string)($runOutdoor['rpe'] ?? '')) ?>">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Variabilita tempa (%)</label>
-                                <input type="number" class="form-control" name="tempo_variability" min="0" step="0.1"
-                                       value="<?= h((string)($runOutdoor['tempo_variability'] ?? '')) ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-8">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Pocit</label>
-                                <input type="text" class="form-control" name="feeling"
-                                       value="<?= h((string)($runOutdoor['feeling'] ?? '')) ?>"
-                                       placeholder="Jak se běželo?">
+                        <div class="card-body pt-3">
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-5">
+                                    <label class="form-label fw-semibold">Místo</label>
+                                    <?php
+                                    $currentOutdoorLocation = (string)($session['location'] ?? '');
+                                    $knownVenueNames = array_map(static fn(array $venue): string => (string)$venue['name'], $trainingVenues);
+                                    $isCustomOutdoorLocation = $currentOutdoorLocation !== '' && !in_array($currentOutdoorLocation, $knownVenueNames, true);
+                                    ?>
+                                    <select class="form-select mb-2" id="run-outdoor-location-select">
+                                        <option value="">- Bez místa -</option>
+                                        <?php foreach ($trainingVenues as $venue): ?>
+                                        <?php $venueName = (string)$venue['name']; ?>
+                                        <option value="<?= h($venueName) ?>" <?= $venueName === $currentOutdoorLocation ? 'selected' : '' ?>>
+                                            <?= h($venueName) ?><?= !empty($venue['address']) ? ' - ' . h((string)$venue['address']) : '' ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <option value="__custom__" <?= $isCustomOutdoorLocation ? 'selected' : '' ?>>Jiné místo (zadat ručně)</option>
+                                    </select>
+                                    <input type="text" class="form-control" name="location"
+                                           id="run-outdoor-location-input"
+                                           value="<?= h($currentOutdoorLocation) ?>"
+                                           placeholder="Napište nové místo..."
+                                           <?= $isCustomOutdoorLocation ? '' : 'readonly' ?>>
+                                </div>
+                                <div class="col-6 col-lg-3">
+                                    <label class="form-label fw-semibold">Povrch</label>
+                                    <select class="form-select" name="surface">
+                                        <option value="asphalt" <?= ($runOutdoor['surface'] ?? 'asphalt') === 'asphalt' ? 'selected' : '' ?>>Asfalt</option>
+                                        <option value="trail" <?= ($runOutdoor['surface'] ?? '') === 'trail' ? 'selected' : '' ?>>Terén</option>
+                                        <option value="mixed" <?= ($runOutdoor['surface'] ?? '') === 'mixed' ? 'selected' : '' ?>>Mix</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <label class="form-label fw-semibold">Počasí</label>
+                                    <input type="text" class="form-control" name="weather"
+                                           value="<?= h((string)($runOutdoor['weather'] ?? '')) ?>"
+                                           placeholder="slunečno, déšť, vítr...">
+                                </div>
+                                <div class="col-12">
+                                    <div class="run-inline-note">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Vzdálenost se dopočítá z času a průměrného tempa.
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -308,7 +271,6 @@ renderHeader('Běh venku - detail');
                                     <th>Km</th>
                                     <th>Čas splitu (mm:ss)</th>
                                     <th>Tempo (mm:ss)</th>
-                                    <th>Max km/h</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -318,7 +280,6 @@ renderHeader('Běh venku - detail');
                                     <td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm"></td>
                                     <td><input type="text" name="split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>
                                     <td><input type="text" name="split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>
-                                    <td><input type="number" step="0.1" min="0" name="split_max_speed[]" class="form-control form-control-sm"></td>
                                     <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>
                                 </tr>
                                 <?php else: ?>
@@ -327,7 +288,6 @@ renderHeader('Běh venku - detail');
                                     <td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm" value="<?= h((string)$split['km_marker']) ?>"></td>
                                     <td><input type="text" name="split_time[]" class="form-control form-control-sm" value="<?= h($split['split_time']) ?>"></td>
                                     <td><input type="text" name="split_pace[]" class="form-control form-control-sm" value="<?= h((string)($split['pace'] ?? '')) ?>"></td>
-                                    <td><input type="number" step="0.1" min="0" name="split_max_speed[]" class="form-control form-control-sm" value="<?= h((string)($split['max_speed_at_km'] ?? '')) ?>"></td>
                                     <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -336,12 +296,12 @@ renderHeader('Běh venku - detail');
                         </table>
                     </div>
 
-                    <div class="d-flex gap-2 align-items-center">
+                    <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center">
                         <button type="submit" class="btn btn-success fw-bold">
-                            <i class="fas fa-save me-1"></i>Uložit běh venku
+                            <i class="fas fa-save me-1"></i>Uložit běh
                         </button>
-                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-secondary">Zpět na trénink</a>
-                        <small id="run-outdoor-autosave-status" class="text-muted ms-2">Automatické ukládání zapnuto</small>
+                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-outline-secondary">Zpět</a>
+                        <small id="run-outdoor-autosave-status" class="text-muted ms-0 ms-sm-2 align-self-center">Automatické ukládání zapnuto</small>
                     </div>
                 </form>
 
@@ -397,20 +357,28 @@ renderHeader('Běh venku - detail');
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-3">
-                        <strong><?= (int)$stats['total_runs'] ?></strong><br>
-                        <small class="text-muted">Běhů</small>
+                        <div class="run-stat-card">
+                            <strong><?= (int)$stats['total_runs'] ?></strong><br>
+                            <small class="text-muted">Běhů</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <strong><?= number_format((float)$stats['total_km'], 2, ',', ' ') ?> km</strong><br>
-                        <small class="text-muted">Celkem</small>
+                        <div class="run-stat-card">
+                            <strong><?= number_format((float)$stats['total_km'], 2, ',', ' ') ?> km</strong><br>
+                            <small class="text-muted">Celkem</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <strong><?= gmdate('H:i:s', (int)$stats['total_seconds']) ?></strong><br>
-                        <small class="text-muted">Celkový čas</small>
+                        <div class="run-stat-card">
+                            <strong><?= gmdate('H:i:s', (int)$stats['total_seconds']) ?></strong><br>
+                            <small class="text-muted">Celkový čas</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <strong><?= (int)$stats['total_calories'] ?> kcal</strong><br>
-                        <small class="text-muted">Kalorie</small>
+                        <div class="run-stat-card">
+                            <strong><?= (int)$stats['total_calories'] ?> kcal</strong><br>
+                            <small class="text-muted">Kalorie</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -426,7 +394,6 @@ function addSplitRow() {
         '<td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm"></td>' +
         '<td><input type="text" name="split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>' +
         '<td><input type="text" name="split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>' +
-        '<td><input type="number" step="0.1" min="0" name="split_max_speed[]" class="form-control form-control-sm"></td>' +
         '<td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
 
@@ -482,7 +449,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const splitKm = form.querySelectorAll('[name="split_km[]"]');
             const splitTime = form.querySelectorAll('[name="split_time[]"]');
             const splitPace = form.querySelectorAll('[name="split_pace[]"]');
-            const splitMaxSpeed = form.querySelectorAll('[name="split_max_speed[]"]');
             const splits = [];
 
             for (let i = 0; i < splitKm.length; i++) {
@@ -490,7 +456,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     km_marker: splitKm[i]?.value || '',
                     split_time: splitTime[i]?.value || '',
                     pace: splitPace[i]?.value || '',
-                    max_speed_at_km: splitMaxSpeed[i]?.value || ''
                 });
             }
 
@@ -498,16 +463,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 session_id: <?= (int)$sessionId ?>,
                 duration_minutes: form.querySelector('[name="duration_minutes"]').value || '0',
                 duration_seconds: form.querySelector('[name="duration_seconds"]').value || '0',
-                distance_km: form.querySelector('[name="distance_km"]').value || '',
+                pace_minutes: form.querySelector('[name="pace_minutes"]').value || '0',
+                pace_seconds: form.querySelector('[name="pace_seconds"]').value || '0',
                 location: form.querySelector('[name="location"]').value || '',
-                run_type: form.querySelector('[name="run_type"]').value || 'free',
                 surface: form.querySelector('[name="surface"]').value || 'asphalt',
-                max_speed: form.querySelector('[name="max_speed"]').value || '',
                 calories_burned: form.querySelector('[name="calories_burned"]').value || '',
-                step_count: form.querySelector('[name="step_count"]').value || '',
-                rpe: form.querySelector('[name="rpe"]').value || '',
-                tempo_variability: form.querySelector('[name="tempo_variability"]').value || '',
-                feeling: form.querySelector('[name="feeling"]').value || '',
+                weather: form.querySelector('[name="weather"]').value || '',
                 splits: splits
             };
         }

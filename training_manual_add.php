@@ -227,39 +227,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $durationMinutes = intParam($_POST, 'run_duration_minutes', 0);
                     $durationSeconds = intParam($_POST, 'run_duration_seconds', 0);
-                    $distanceKm = $_POST['run_distance_km'] !== '' ? (float)$_POST['run_distance_km'] : 0;
-                    $runType = (string)($_POST['run_outdoor_type'] ?? 'free');
+                    $paceMinutes = intParam($_POST, 'run_pace_minutes', 0);
+                    $paceSeconds = intParam($_POST, 'run_pace_seconds', 0);
                     $surface = (string)($_POST['run_outdoor_surface'] ?? 'asphalt');
+                    $weather = trim((string)($_POST['run_outdoor_weather'] ?? ''));
+                    $caloriesBurned = $_POST['run_calories_burned'] !== '' ? (int)$_POST['run_calories_burned'] : null;
                     
-                    $allowedRunTypes = ['free', 'intervals', 'tempo', 'race', 'recovery'];
                     $allowedSurfaces = ['asphalt', 'trail', 'mixed'];
-                    if (!in_array($runType, $allowedRunTypes, true)) {
-                        $runType = 'free';
-                    }
                     if (!in_array($surface, $allowedSurfaces, true)) {
                         $surface = 'asphalt';
                     }
                     
                     $durationTotalSeconds = $durationMinutes * 60 + $durationSeconds;
+                    $paceTotalSeconds = $paceMinutes * 60 + $paceSeconds;
+                    $distanceKm = $paceTotalSeconds > 0 ? round($durationTotalSeconds / $paceTotalSeconds, 2) : 0;
                     updateRunOutdoorSession(
                         (int)$runSession['id'],
                         $durationTotalSeconds,
                         $distanceKm,
-                        $runType,
+                        'free',
                         $surface,
+                        $weather !== '' ? $weather : null,
                         null,
-                        null,
+                        $caloriesBurned,
                         null,
                         null,
                         null,
                         null
                     );
+
+                    $splitKm = $_POST['run_split_km'] ?? [];
+                    $splitTime = $_POST['run_split_time'] ?? [];
+                    $splitPace = $_POST['run_split_pace'] ?? [];
+                    $splits = [];
+                    $rows = max(count($splitKm), count($splitTime));
+                    for ($i = 0; $i < $rows; $i++) {
+                        $km = isset($splitKm[$i]) && $splitKm[$i] !== '' ? (float)$splitKm[$i] : 0;
+                        $time = trim((string)($splitTime[$i] ?? ''));
+                        $pace = trim((string)($splitPace[$i] ?? ''));
+
+                        if ($km <= 0 || $time === '') {
+                            continue;
+                        }
+                        if (!preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+                            continue;
+                        }
+                        if ($pace !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $pace)) {
+                            $pace = null;
+                        }
+
+                        $splits[] = [
+                            'km_marker' => $km,
+                            'split_time' => $time,
+                            'pace' => $pace ?: null,
+                        ];
+                    }
+
+                    saveRunOutdoorSplits((int)$runSession['id'], $splits);
                     
                 } elseif ($sportType === 'run_treadmill') {
                     $durationMinutes = intParam($_POST, 'treadmill_duration_minutes', 0);
                     $durationSeconds = intParam($_POST, 'treadmill_duration_seconds', 0);
                     $paceMinutes = intParam($_POST, 'treadmill_pace_minutes', 0);
                     $paceSeconds = intParam($_POST, 'treadmill_pace_seconds', 0);
+                    $caloriesBurned = $_POST['treadmill_calories_burned'] !== '' ? (int)$_POST['treadmill_calories_burned'] : null;
                     
                     $durationTotalSeconds = $durationMinutes * 60 + $durationSeconds;
                     $paceTotalSeconds = $paceMinutes * 60 + $paceSeconds;
@@ -271,6 +302,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     createRunTreadmillSession($sessionId, $durationTotalSeconds, $distanceKm);
+                    $runSession = getRunTreadmillSessionByTrainingSession($sessionId);
+                    if ($runSession) {
+                        updateRunTreadmillSession(
+                            (int)$runSession['id'],
+                            $durationTotalSeconds,
+                            $distanceKm,
+                            $caloriesBurned,
+                            $location !== '' ? $location : null,
+                            null
+                        );
+
+                        $splitKm = $_POST['treadmill_split_km'] ?? [];
+                        $splitTime = $_POST['treadmill_split_time'] ?? [];
+                        $splitPace = $_POST['treadmill_split_pace'] ?? [];
+                        $splits = [];
+                        $rows = max(count($splitKm), count($splitTime));
+                        for ($i = 0; $i < $rows; $i++) {
+                            $km = isset($splitKm[$i]) && $splitKm[$i] !== '' ? (float)$splitKm[$i] : 0;
+                            $time = trim((string)($splitTime[$i] ?? ''));
+                            $pace = trim((string)($splitPace[$i] ?? ''));
+
+                            if ($km <= 0 || $time === '') {
+                                continue;
+                            }
+                            if (!preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+                                continue;
+                            }
+                            if ($pace !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $pace)) {
+                                $pace = null;
+                            }
+
+                            $splits[] = [
+                                'km_marker' => $km,
+                                'split_time' => $time,
+                                'pace' => $pace ?: null,
+                            ];
+                        }
+
+                        saveRunTreadmillSplits((int)$runSession['id'], $splits);
+                    }
                 }
 
                 // Zpracovat fotografie
@@ -324,6 +395,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $pdo->commit();
                 flash('success', 'Minulý trénink byl uložen (' . $createdSeries . ' sérií).');
+                if ($sportType === 'golf') {
+                    redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
+                }
+                if ($sportType === 'run_outdoor') {
+                    redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
+                }
+                if ($sportType === 'run_treadmill') {
+                    redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
+                }
+
                 redirect(BASE_URL . '/athlete_detail.php?id=' . $athleteId);
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
@@ -584,61 +665,85 @@ function renderGolfForm() {
 function renderTreadmillForm() {
     return `<div class="p-3">
         <div class="row g-2 mb-3">
-            <div class="col-4">
-                <label class="form-label form-label-sm fw-semibold">Minuty</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Doba min</label>
                 <input type="number" name="treadmill_duration_minutes" class="form-control form-control-sm" min="0" placeholder="0">
             </div>
-            <div class="col-4">
-                <label class="form-label form-label-sm fw-semibold">Sekundy</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Doba sek</label>
                 <input type="number" name="treadmill_duration_seconds" class="form-control form-control-sm" min="0" max="59" placeholder="0">
             </div>
-            <div class="col-4"></div>
-        </div>
-        <div class="row g-2 mb-3">
-            <div class="col-4">
-                <label class="form-label form-label-sm fw-semibold">Tempo (min)</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Tempo min/km</label>
                 <input type="number" name="treadmill_pace_minutes" class="form-control form-control-sm" min="0" placeholder="0">
             </div>
-            <div class="col-4">
-                <label class="form-label form-label-sm fw-semibold">Tempo (sek)</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Tempo sek</label>
                 <input type="number" name="treadmill_pace_seconds" class="form-control form-control-sm" min="0" max="59" placeholder="0">
             </div>
-            <div class="col-4">
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
                 <label class="form-label form-label-sm fw-semibold">Kalorie</label>
                 <input type="number" name="treadmill_calories_burned" class="form-control form-control-sm" min="0">
             </div>
+            <div class="col-md-8">
+                <div class="run-inline-note mt-4">Vzdálenost se dopočítá z času a průměrného tempa.</div>
+            </div>
         </div>
-        <small class="text-muted">Vzdálenost se vypočte automaticky.</small>
+
+        <div class="special-splits">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label form-label-sm fw-semibold mb-0">Splity (volitelně)</label>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addSpecialSplitRow(this, 'treadmill')">
+                    <i class="fas fa-plus me-1"></i>Přidat mezičas
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Km</th>
+                            <th>Čas</th>
+                            <th>Tempo</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="number" step="0.01" min="0" name="treadmill_split_km[]" class="form-control form-control-sm"></td>
+                            <td><input type="text" name="treadmill_split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                            <td><input type="text" name="treadmill_split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                            <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSpecialSplitRow(this)"><i class="fas fa-times"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>`;
 }
 
 function renderRunOutdoorForm() {
     return `<div class="p-3">
         <div class="row g-2 mb-3">
-            <div class="col-md-4">
-                <label class="form-label form-label-sm fw-semibold">Čas (min)</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Doba min</label>
                 <input type="number" name="run_duration_minutes" class="form-control form-control-sm" min="0">
             </div>
-            <div class="col-md-4">
-                <label class="form-label form-label-sm fw-semibold">Čas (sek)</label>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Doba sek</label>
                 <input type="number" name="run_duration_seconds" class="form-control form-control-sm" min="0" max="59">
             </div>
-            <div class="col-md-4">
-                <label class="form-label form-label-sm fw-semibold">Vzdálenost (km)</label>
-                <input type="number" name="run_distance_km" class="form-control form-control-sm" step="0.01" min="0">
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Tempo min/km</label>
+                <input type="number" name="run_pace_minutes" class="form-control form-control-sm" min="0">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label form-label-sm fw-semibold">Tempo sek</label>
+                <input type="number" name="run_pace_seconds" class="form-control form-control-sm" min="0" max="59">
             </div>
         </div>
-        <div class="row g-2">
-            <div class="col-md-4">
-                <label class="form-label form-label-sm fw-semibold">Typ běhu</label>
-                <select name="run_outdoor_type" class="form-select form-select-sm">
-                    <option value="free">Volný</option>
-                    <option value="intervals">Intervaly</option>
-                    <option value="tempo">Tempo</option>
-                    <option value="race">Závod</option>
-                    <option value="recovery">Regenerační</option>
-                </select>
-            </div>
+        <div class="row g-2 mb-3">
             <div class="col-md-4">
                 <label class="form-label form-label-sm fw-semibold">Povrch</label>
                 <select name="run_outdoor_surface" class="form-select form-select-sm">
@@ -650,6 +755,39 @@ function renderRunOutdoorForm() {
             <div class="col-md-4">
                 <label class="form-label form-label-sm fw-semibold">Kalorie</label>
                 <input type="number" name="run_calories_burned" class="form-control form-control-sm" min="0">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label form-label-sm fw-semibold">Počasí</label>
+                <input type="text" name="run_outdoor_weather" class="form-control form-control-sm" placeholder="slunečno, déšť...">
+            </div>
+        </div>
+
+        <div class="special-splits">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label form-label-sm fw-semibold mb-0">Splity (volitelně)</label>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addSpecialSplitRow(this, 'run')">
+                    <i class="fas fa-plus me-1"></i>Přidat mezičas
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Km</th>
+                            <th>Čas</th>
+                            <th>Tempo</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="number" step="0.01" min="0" name="run_split_km[]" class="form-control form-control-sm"></td>
+                            <td><input type="text" name="run_split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                            <td><input type="text" name="run_split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                            <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSpecialSplitRow(this)"><i class="fas fa-times"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>`;
@@ -690,6 +828,33 @@ function addGolfHole() {
         <td><input type="number" class="form-control form-control-sm" name="golf_hole_score[]" placeholder="–" style="width:100%"></td>
     `;
     body.appendChild(row);
+}
+
+function addSpecialSplitRow(button, prefix) {
+    const container = button.closest('.special-splits');
+    if (!container) return;
+
+    const tbody = container.querySelector('tbody');
+    if (!tbody) return;
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><input type="number" step="0.01" min="0" name="${prefix}_split_km[]" class="form-control form-control-sm"></td>
+        <td><input type="text" name="${prefix}_split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>
+        <td><input type="text" name="${prefix}_split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>
+        <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSpecialSplitRow(this)"><i class="fas fa-times"></i></button></td>
+    `;
+    tbody.appendChild(row);
+}
+
+function removeSpecialSplitRow(button) {
+    const row = button.closest('tr');
+    const tbody = row?.parentElement;
+    if (!row || !tbody) return;
+
+    if (tbody.querySelectorAll('tr').length > 1) {
+        row.remove();
+    }
 }
 
 function setupGolfCourseSelect() {

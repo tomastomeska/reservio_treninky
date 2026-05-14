@@ -36,15 +36,15 @@ if (!$runTreadmill) {
     createRunTreadmillSession($sessionId, 0, 0);
     $runTreadmill = getRunTreadmillSessionByTrainingSession($sessionId);
 }
-
-$paceSecondsPerKm = 0;
-if ($runTreadmill && (int)$runTreadmill['duration_seconds'] > 0 && (float)$runTreadmill['distance_km'] > 0) {
-    $paceSecondsPerKm = (int)round((int)$runTreadmill['duration_seconds'] / (float)$runTreadmill['distance_km']);
+$runTreadmillSplits = getRunTreadmillSplits((int)$runTreadmill['id']);
+$treadmillPaceSeconds = 0;
+if ((int)$runTreadmill['duration_seconds'] > 0 && (float)$runTreadmill['distance_km'] > 0) {
+    $treadmillPaceSeconds = (int)round((int)$runTreadmill['duration_seconds'] / (float)$runTreadmill['distance_km']);
 }
-$paceMinutesValue = $paceSecondsPerKm > 0 ? intdiv($paceSecondsPerKm, 60) : 0;
-$paceSecondsValue = $paceSecondsPerKm > 0 ? $paceSecondsPerKm % 60 : 0;
-$paceDisplay = $paceSecondsPerKm > 0
-    ? sprintf('%d:%02d / km', intdiv($paceSecondsPerKm, 60), $paceSecondsPerKm % 60)
+$paceMinutesValue = $treadmillPaceSeconds > 0 ? intdiv($treadmillPaceSeconds, 60) : 0;
+$paceSecondsValue = $treadmillPaceSeconds > 0 ? $treadmillPaceSeconds % 60 : 0;
+$paceDisplay = $treadmillPaceSeconds > 0
+    ? sprintf('%d:%02d / km', intdiv($treadmillPaceSeconds, 60), $treadmillPaceSeconds % 60)
     : '–';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save') {
@@ -58,12 +58,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $distanceKm = $paceInputSeconds > 0
         ? round($durationSeconds / $paceInputSeconds, 2)
         : 0;
-    $caloriesBurned = intParam($_POST, 'calories_burned');
+    $caloriesBurned = $_POST['calories_burned'] !== '' ? (int)$_POST['calories_burned'] : null;
     $location = normalizeTrainingVenueName($_POST['location'] ?? '');
-    $feeling = trim($_POST['feeling'] ?? '');
+    $splitKm = $_POST['split_km'] ?? [];
+    $splitTime = $_POST['split_time'] ?? [];
+    $splitPace = $_POST['split_pace'] ?? [];
 
     if ($durationSeconds <= 0 || $paceInputSeconds <= 0) {
-        flash('danger', 'Vyplňte dobu trvání a průměrné tempo.');
+        flash('danger', 'Vyplňte dobu běhu a průměrné tempo.');
         redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
     }
 
@@ -75,15 +77,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         (int)$runTreadmill['id'],
         $durationSeconds,
         $distanceKm,
-        $caloriesBurned > 0 ? $caloriesBurned : null,
+        $caloriesBurned,
         $location !== '' ? $location : null,
-        $feeling !== '' ? $feeling : null
+        null
     );
 
-    $pdo->prepare('UPDATE training_sessions SET completed_at = NOW(), location = ? WHERE id = ?')
+    $pdo->prepare('UPDATE training_sessions SET location = ? WHERE id = ?')
         ->execute([$location !== '' ? $location : null, $sessionId]);
 
-    flash('success', 'Běh byl uložen a trénink ukončen.');
+    $splits = [];
+    $rows = max(count($splitKm), count($splitTime));
+    for ($i = 0; $i < $rows; $i++) {
+        $km = isset($splitKm[$i]) && $splitKm[$i] !== '' ? (float)$splitKm[$i] : 0;
+        $time = trim((string)($splitTime[$i] ?? ''));
+        $pace = trim((string)($splitPace[$i] ?? ''));
+
+        if ($km <= 0 || $time === '') {
+            continue;
+        }
+
+        if (!preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+            continue;
+        }
+
+        if ($pace !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $pace)) {
+            $pace = null;
+        }
+
+        $splits[] = [
+            'km_marker' => $km,
+            'split_time' => $time,
+            'pace' => $pace ?: null,
+        ];
+    }
+
+    saveRunTreadmillSplits((int)$runTreadmill['id'], $splits);
+
+    flash('success', 'Běh na páse byl uložen.');
+    redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'complete') {
+    if (!verifyCsrf($_POST['csrf_token'] ?? '')) {
+        flash('danger', 'Neplatný bezpečnostní token.');
+        redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
+    }
+
+    $pdo->prepare('UPDATE training_sessions SET completed_at = NOW() WHERE id = ?')
+        ->execute([$sessionId]);
+
+    flash('success', 'Běh na páse byl ukončen.');
     redirect(BASE_URL . '/athlete_detail.php?id=' . $session['athlete_id']);
 }
 
@@ -97,9 +140,9 @@ renderHeader('Běh na páse – Detail');
                 <i class="fas fa-running me-2"></i>Běh na páse
             </div>
             <div class="card-body">
-                <div class="treadmill-form-topbar mb-4">
+                <div class="run-form-topbar mb-4">
                     <div>
-                        <div class="text-uppercase text-muted small fw-semibold">Záznam po doběhu</div>
+                        <div class="text-uppercase text-muted small fw-semibold">Záznam běhu</div>
                         <div class="fs-5 fw-bold"><?= h($session['first_name']) ?> <?= h($session['last_name']) ?></div>
                         <div class="text-muted small">Sada: <?= h($session['set_name']) ?></div>
                     </div>
@@ -113,21 +156,21 @@ renderHeader('Běh na páse – Detail');
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="save">
 
-                    <div class="card border-0 shadow-sm mb-3 treadmill-section-card">
+                    <div class="card border-0 shadow-sm mb-3 run-section-card">
                         <div class="card-header bg-white border-0 pb-0">
-                            <div class="treadmill-section-kicker">Běh</div>
+                            <div class="run-section-kicker">Běh</div>
                             <h5 class="mb-0">Čas a tempo</h5>
                         </div>
                         <div class="card-body pt-3">
                             <div class="row g-3">
                                 <div class="col-6 col-md-3">
-                                    <label class="form-label fw-semibold">Minuty</label>
+                                    <label class="form-label fw-semibold">Doba min</label>
                                     <input type="number" name="duration_minutes" class="form-control form-control-lg"
                                            value="<?= intval($runTreadmill['duration_seconds'] / 60) ?>"
                                            min="0" required>
                                 </div>
                                 <div class="col-6 col-md-3">
-                                    <label class="form-label fw-semibold">Sekundy</label>
+                                    <label class="form-label fw-semibold">Doba sek</label>
                                     <input type="number" name="duration_seconds" class="form-control form-control-lg"
                                            value="<?= $runTreadmill['duration_seconds'] % 60 ?>"
                                            min="0" max="59">
@@ -136,16 +179,16 @@ renderHeader('Běh na páse – Detail');
                                     <label class="form-label fw-semibold">Tempo min/km</label>
                                     <input type="number" name="pace_minutes" class="form-control form-control-lg"
                                            value="<?= $paceMinutesValue ?>"
-                                           min="0" placeholder="Minuty" required>
+                                           min="0" required>
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label fw-semibold">Tempo sek</label>
                                     <input type="number" name="pace_seconds" class="form-control form-control-lg"
                                            value="<?= $paceSecondsValue ?>"
-                                           min="0" max="59" placeholder="Sekundy" required>
+                                           min="0" max="59" required>
                                 </div>
                                 <div class="col-12">
-                                    <div class="treadmill-inline-note">
+                                    <div class="run-inline-note">
                                         <i class="fas fa-info-circle me-2"></i>
                                         Vzdálenost dopočítáme automaticky z času a tempa.
                                     </div>
@@ -154,10 +197,10 @@ renderHeader('Běh na páse – Detail');
                         </div>
                     </div>
 
-                    <div class="card border-0 shadow-sm mb-3 treadmill-section-card">
+                    <div class="card border-0 shadow-sm mb-3 run-section-card">
                         <div class="card-header bg-white border-0 pb-0">
-                            <div class="treadmill-section-kicker">Detaily</div>
-                            <h5 class="mb-0">Kalorie, místo a poznámka</h5>
+                            <div class="run-section-kicker">Detaily</div>
+                            <h5 class="mb-0">Kalorie, místo a splity</h5>
                         </div>
                         <div class="card-body pt-3">
                             <div class="row g-3">
@@ -189,26 +232,69 @@ renderHeader('Běh na páse – Detail');
                                            value="<?= h($currentTreadmillLocation) ?>"
                                            placeholder="Napište nové místo..."
                                            <?= $isCustomTreadmillLocation ? '' : 'readonly' ?>>
-                                    <div class="form-text">Vyberte sportoviště ze seznamu, nebo zvolte „Jiné místo" a napište vlastní.</div>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-semibold">Pocit <span class="text-muted fw-normal">(nepovinné)</span></label>
-                                    <textarea name="feeling" class="form-control" rows="3" placeholder="Jak se cítil během běhu?...">
-<?= h($runTreadmill['feeling'] ?? '') ?></textarea>
                                 </div>
                             </div>
+
+                            <hr class="my-4">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h5 class="mb-0">Splity</h5>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addSplitRow()">
+                                    <i class="fas fa-plus me-1"></i>Přidat split
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered align-middle" id="splits-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Km</th>
+                                            <th>Čas splitu</th>
+                                            <th>Tempo</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($runTreadmillSplits)): ?>
+                                        <tr>
+                                            <td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm"></td>
+                                            <td><input type="text" name="split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                                            <td><input type="text" name="split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>
+                                            <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>
+                                        </tr>
+                                        <?php else: ?>
+                                        <?php foreach ($runTreadmillSplits as $split): ?>
+                                        <tr>
+                                            <td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm" value="<?= h((string)$split['km_marker']) ?>"></td>
+                                            <td><input type="text" name="split_time[]" class="form-control form-control-sm" value="<?= h($split['split_time']) ?>"></td>
+                                            <td><input type="text" name="split_pace[]" class="form-control form-control-sm" value="<?= h((string)($split['pace'] ?? '')) ?>"></td>
+                                            <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="form-text mt-2">Splity jsou volitelné. Stačí vyplnit kilometr, čas a případně tempo.</div>
                         </div>
                     </div>
 
                     <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center">
                         <button type="submit" class="btn btn-primary btn-lg fw-bold">
-                            <i class="fas fa-save me-1"></i>Uložit a ukončit trénink
+                            <i class="fas fa-save me-1"></i>Uložit běh
                         </button>
-                        <a href="<?= BASE_URL ?>/athlete_detail.php?id=<?= $session['athlete_id'] ?>" class="btn btn-outline-secondary btn-lg">
+                        <a href="<?= BASE_URL ?>/training_session.php?id=<?= $sessionId ?>" class="btn btn-outline-secondary btn-lg">
                             Zpět
                         </a>
                         <small id="treadmill-autosave-status" class="text-muted ms-0 ms-sm-2 align-self-center">Automatické ukládání zapnuto</small>
                     </div>
+                </form>
+
+                <form method="post" class="mt-3">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="complete">
+                    <button type="submit" class="btn btn-success fw-bold"
+                            onclick="return confirm('Chcete ukončit tento běh na páse?')">
+                        <i class="fas fa-flag-checkered me-1"></i>Ukončit trénink
+                    </button>
                 </form>
 
                 <hr>
@@ -216,25 +302,25 @@ renderHeader('Běh na páse – Detail');
                 <h5 class="mb-3">Statistika běhu</h5>
                 <div class="row g-3 text-center">
                     <div class="col-6 col-md-3">
-                        <div class="treadmill-stat-card">
+                        <div class="run-stat-card">
                             <strong><?= number_format($runTreadmill['distance_km'], 2, ',', ' ') ?> km</strong>
                             <br><small class="text-muted">Vzdálenost</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="treadmill-stat-card">
+                        <div class="run-stat-card">
                             <strong><?= gmdate('H:i:s', $runTreadmill['duration_seconds']) ?></strong>
                             <br><small class="text-muted">Čas</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="treadmill-stat-card">
+                        <div class="run-stat-card">
                             <strong><?= h($paceDisplay) ?></strong>
                             <br><small class="text-muted">Průměrné tempo</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="treadmill-stat-card">
+                        <div class="run-stat-card">
                             <strong><?= h($runTreadmill['calories_burned'] ?? '–') ?> kcal</strong>
                             <br><small class="text-muted">Kalorie</small>
                         </div>
@@ -320,6 +406,36 @@ renderHeader('Běh na páse – Detail');
 </div>
 
 <script>
+function addSplitRow() {
+    const tbody = document.querySelector('#splits-table tbody');
+    if (!tbody) return;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td><input type="number" step="0.01" min="0" name="split_km[]" class="form-control form-control-sm"></td>' +
+        '<td><input type="text" name="split_time[]" class="form-control form-control-sm" placeholder="05:15"></td>' +
+        '<td><input type="text" name="split_pace[]" class="form-control form-control-sm" placeholder="05:15"></td>' +
+        '<td><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSplitRow(this)"><i class="fas fa-times"></i></button></td>';
+    tbody.appendChild(tr);
+
+    if (window.__treadmillAutosave && typeof window.__treadmillAutosave.scheduleSave === 'function') {
+        window.__treadmillAutosave.scheduleSave();
+    }
+}
+
+function removeSplitRow(btn) {
+    const row = btn.closest('tr');
+    const tbody = document.querySelector('#splits-table tbody');
+    if (!row || !tbody) return;
+
+    if (tbody.querySelectorAll('tr').length > 1) {
+        row.remove();
+        if (window.__treadmillAutosave && typeof window.__treadmillAutosave.scheduleSave === 'function') {
+            window.__treadmillAutosave.scheduleSave();
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('treadmill-form');
     const statusEl = document.getElementById('treadmill-autosave-status');
@@ -353,6 +469,19 @@ document.addEventListener('DOMContentLoaded', function() {
         endpoint: '<?= BASE_URL ?>/api/save_run_treadmill_draft.php',
         debounceMs: 700,
         buildPayload: function() {
+            const splitKm = form.querySelectorAll('[name="split_km[]"]');
+            const splitTime = form.querySelectorAll('[name="split_time[]"]');
+            const splitPace = form.querySelectorAll('[name="split_pace[]"]');
+            const splits = [];
+
+            for (let i = 0; i < splitKm.length; i++) {
+                splits.push({
+                    km_marker: splitKm[i]?.value || '',
+                    split_time: splitTime[i]?.value || '',
+                    pace: splitPace[i]?.value || ''
+                });
+            }
+
             return {
                 session_id: <?= (int)$sessionId ?>,
                 duration_minutes: form.querySelector('[name="duration_minutes"]').value || '0',
@@ -361,10 +490,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 pace_seconds: form.querySelector('[name="pace_seconds"]').value || '0',
                 calories_burned: form.querySelector('[name="calories_burned"]').value || '',
                 location: form.querySelector('[name="location"]').value || '',
-                feeling: form.querySelector('[name="feeling"]').value || ''
+                splits: splits
             };
         }
     });
+
+    window.__treadmillAutosave = autosave;
 
     form.addEventListener('submit', function() {
         if (autosave && typeof autosave.saveNow === 'function') {

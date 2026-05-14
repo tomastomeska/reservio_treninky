@@ -150,3 +150,37 @@ CREATE TABLE IF NOT EXISTS `paired_sessions` (
     `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Výzvy k zadání tělesné hmotnosti sportovcem přes bezpečný odkaz
+CREATE TABLE IF NOT EXISTS `athlete_weight_invites` (
+    `id`         INT AUTO_INCREMENT PRIMARY KEY,
+    `athlete_id` INT NOT NULL,
+    `coach_id`   INT NOT NULL,
+    `email`      VARCHAR(255) NOT NULL,
+    `token_hash` CHAR(64) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `used_at`    DATETIME NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_weight_invite_token_hash` (`token_hash`),
+    KEY `idx_weight_invites_athlete` (`athlete_id`),
+    KEY `idx_weight_invites_expires` (`expires_at`),
+    FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Historie tělesné hmotnosti sportovce
+CREATE TABLE IF NOT EXISTS `athlete_weight_logs` (
+    `id`                  INT AUTO_INCREMENT PRIMARY KEY,
+    `athlete_id`          INT NOT NULL,
+    `measured_at`         DATE NOT NULL,
+    `weight_kg`           DECIMAL(5,2) NOT NULL,
+    `source`              ENUM('coach','athlete_link') NOT NULL DEFAULT 'coach',
+    `invite_id`           INT NULL,
+    `created_by_coach_id` INT NULL,
+    `created_at`          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY `idx_weight_logs_athlete_date` (`athlete_id`, `measured_at`),
+    KEY `idx_weight_logs_invite` (`invite_id`),
+    FOREIGN KEY (`athlete_id`) REFERENCES `athletes`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`invite_id`) REFERENCES `athlete_weight_invites`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`created_by_coach_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -27,13 +27,21 @@ if (!$session) {
     redirect(BASE_URL . '/dashboard.php');
 }
 
-// Pokud je trénink dokončený, přesměruj na detail
-if ($session['completed_at']) {
-    redirect(BASE_URL . '/training_detail.php?id=' . $sessionId);
-}
-
 // Načtení cviků v session snapshotu (fallback pro starší data)
 $exercises = getSessionExercises($sessionId, (int)$session['workout_set_id']);
+
+if (count($exercises) === 1) {
+    $primarySportType = $exercises[0]['sport_type'] ?? 'standard';
+    if ($primarySportType === 'golf') {
+        redirect(BASE_URL . '/training_golf_detail.php?id=' . $sessionId);
+    }
+    if ($primarySportType === 'run_outdoor') {
+        redirect(BASE_URL . '/training_run_outdoor_detail.php?id=' . $sessionId);
+    }
+    if ($primarySportType === 'run_treadmill') {
+        redirect(BASE_URL . '/training_run_treadmill_detail.php?id=' . $sessionId);
+    }
+}
 
 // Načtení existujících sérií pro každý cvik
 $seriesByExercise = [];
@@ -62,9 +70,11 @@ renderHeader('Aktivní trénink');
         </div>
     </div>
     <div class="ms-auto">
+        <?php if (!$session['completed_at']): ?>
         <button class="btn btn-success btn-lg fw-bold training-finish-btn" data-bs-toggle="modal" data-bs-target="#completeModal">
             <i class="fas fa-flag-checkered me-2"></i>Ukončit trénink
         </button>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -239,12 +249,14 @@ renderHeader('Aktivní trénink');
 <?php endforeach; ?>
 
 <!-- Tlačítko ukončit trénink dole -->
+<?php if (!$session['completed_at']): ?>
 <div class="text-center my-4">
     <button class="btn btn-success btn-lg fw-bold px-5"
             data-bs-toggle="modal" data-bs-target="#completeModal">
         <i class="fas fa-flag-checkered me-2"></i>Ukončit trénink
     </button>
 </div>
+<?php endif; ?>
 
 <?php endif; ?>
 
