@@ -4,19 +4,12 @@
 // env.php (pokud existuje) přepisuje vychozi hodnoty
 // ============================================================
 
-// Nacist lokalni/produkcni prepisy (ignorovano gitem)
-$_envCandidates = [
-    __DIR__ . '/env.php',
-    __DIR__ . '/env.production.php',
-    __DIR__ . '/env.local.php',
-];
-foreach ($_envCandidates as $_envFile) {
-    if (file_exists($_envFile)) {
-        require_once $_envFile;
-        break;
-    }
+// Načist lokalni/produkcni přepisy (ignorovano gitem)
+$_envFile = __DIR__ . '/env.php';
+if (file_exists($_envFile)) {
+    require_once $_envFile;
 }
-unset($_envCandidates, $_envFile);
+unset($_envFile);
 
 // Zakladni nastaveni aplikace
 define('APP_NAME',     'TrainerApp');

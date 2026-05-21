@@ -4,19 +4,12 @@
 // Upravte podle vaseho nastaveni WAMP/MySQL
 // ============================================================
 
-// Bezpecnostni fallback: nacti env profil i kdyz vstupni skript nenasel config.php
-$_envCandidates = [
-    __DIR__ . '/env.php',
-    __DIR__ . '/env.production.php',
-    __DIR__ . '/env.local.php',
-];
-foreach ($_envCandidates as $_envFile) {
-    if (file_exists($_envFile)) {
-        require_once $_envFile;
-        break;
-    }
+// Bezpecnostni fallback: nacti env.php i kdyz nektery vstupni skript nenasel config.php
+$_envFile = __DIR__ . '/env.php';
+if (file_exists($_envFile)) {
+    require_once $_envFile;
 }
-unset($_envCandidates, $_envFile);
+unset($_envFile);
 
 if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
 if (!defined('DB_NAME'))    define('DB_NAME',    'marcelmiler');
@@ -27,52 +20,20 @@ if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 function getDB(): PDO {
     static $pdo = null;
     if ($pdo === null) {
+        $dsn = sprintf(
+            'mysql:host=%s;dbname=%s;charset=%s',
+            DB_HOST, DB_NAME, DB_CHARSET
+        );
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
-
-        $hosts = [];
-        foreach (explode(',', (string)DB_HOST) as $h) {
-            $h = trim($h);
-            if ($h !== '') {
-                $hosts[] = $h;
-            }
-        }
-        if (empty($hosts)) {
-            $hosts[] = 'localhost';
-        }
-        if (!in_array('localhost', $hosts, true)) {
-            $hosts[] = 'localhost';
-        }
-        if (!in_array('127.0.0.1', $hosts, true)) {
-            $hosts[] = '127.0.0.1';
-        }
-
-        $errors = [];
         try {
-            foreach ($hosts as $host) {
-                $dsn = sprintf(
-                    'mysql:host=%s;dbname=%s;charset=%s',
-                    $host,
-                    DB_NAME,
-                    DB_CHARSET
-                );
-                try {
-                    $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-                    ensureSchemaUpgrades($pdo);
-                    break;
-                } catch (PDOException $e) {
-                    $errors[] = $host . ': ' . $e->getMessage();
-                }
-            }
-        } catch (Throwable $e) {
-            $errors[] = 'unexpected: ' . $e->getMessage();
-        }
-
-        if ($pdo === null) {
-            error_log('DB connection failed (' . implode(' | ', $errors) . ')');
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            ensureSchemaUpgrades($pdo);
+        } catch (PDOException $e) {
+            error_log('DB connection failed: ' . $e->getMessage());
             die('<!DOCTYPE html><html lang="cs"><head><meta charset="UTF-8">
                 <title>Chyba DB</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
@@ -97,12 +58,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     $stmt2 = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'photo'");
     if (!$stmt2->fetch()) {
         $pdo->exec('ALTER TABLE exercises ADD COLUMN photo VARCHAR(255) NULL');
-    }
-
-    // Typ sportu pro cviky
-    $stmtExerciseSportType = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'sport_type'");
-    if (!$stmtExerciseSportType->fetch()) {
-        $pdo->exec("ALTER TABLE exercises ADD COLUMN sport_type ENUM('standard','golf','run_outdoor','run_treadmill') NOT NULL DEFAULT 'standard' AFTER photo");
     }
 
     // Globalni cviky mohou mit coach_id = NULL
@@ -140,119 +95,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             KEY `idx_training_session_photos_session` (`session_id`),
             CONSTRAINT `fk_training_session_photos_session`
                 FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    // Speciální sporty - základní tabulky (běh venku, běh na páse, golf)
-    $pdo->exec(" 
-        CREATE TABLE IF NOT EXISTS `run_treadmill_sessions` (
-            `id`              INT AUTO_INCREMENT PRIMARY KEY,
-            `session_id`      INT NOT NULL,
-            `duration_seconds` INT NOT NULL DEFAULT 0,
-            `distance_km`     DECIMAL(7,2) NOT NULL DEFAULT 0,
-            `calories_burned` INT NULL,
-            `location`        VARCHAR(255) NULL,
-            `feeling`         TEXT NULL,
-            `started_at`      DATETIME NULL,
-            `ended_at`        DATETIME NULL,
-            `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY `uq_run_treadmill_session` (`session_id`),
-            CONSTRAINT `fk_run_treadmill_session_training`
-                FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $pdo->exec(" 
-        CREATE TABLE IF NOT EXISTS `run_outdoor_sessions` (
-            `id`               INT AUTO_INCREMENT PRIMARY KEY,
-            `session_id`       INT NOT NULL,
-            `duration_seconds` INT NOT NULL DEFAULT 0,
-            `distance_km`      DECIMAL(7,2) NOT NULL DEFAULT 0,
-            `run_type`         ENUM('free','interval','tempo','hill','long') NOT NULL DEFAULT 'free',
-            `surface`          ENUM('asphalt','trail','track','treadmill','other') NOT NULL DEFAULT 'asphalt',
-            `weather`          VARCHAR(120) NULL,
-            `avg_pace`         VARCHAR(10) NULL,
-            `max_speed`        DECIMAL(5,2) NULL,
-            `calories_burned`  INT NULL,
-            `step_count`       INT NULL,
-            `rpe`              TINYINT NULL,
-            `tempo_variability` DECIMAL(5,2) NULL,
-            `feeling`          TEXT NULL,
-            `started_at`       DATETIME NULL,
-            `ended_at`         DATETIME NULL,
-            `created_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY `uq_run_outdoor_session` (`session_id`),
-            CONSTRAINT `fk_run_outdoor_session_training`
-                FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $pdo->exec(" 
-        CREATE TABLE IF NOT EXISTS `run_outdoor_splits` (
-            `id`               INT AUTO_INCREMENT PRIMARY KEY,
-            `run_session_id`   INT NOT NULL,
-            `km_marker`        DECIMAL(4,2) NOT NULL,
-            `split_time`       VARCHAR(10) NOT NULL,
-            `pace`             VARCHAR(10) NULL,
-            `max_speed_at_km`  DECIMAL(5,2) NULL,
-            `created_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY `uniq_run_outdoor_split` (`run_session_id`, `km_marker`),
-            KEY `idx_run_outdoor_splits` (`run_session_id`),
-            CONSTRAINT `fk_run_outdoor_splits_session`
-                FOREIGN KEY (`run_session_id`) REFERENCES `run_outdoor_sessions`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $pdo->exec(" 
-        CREATE TABLE IF NOT EXISTS `golf_sessions` (
-            `id`                 INT AUTO_INCREMENT PRIMARY KEY,
-            `session_id`         INT NOT NULL,
-            `course_id`          INT NULL,
-            `tee_id`             INT NULL,
-            `tee_name`           VARCHAR(80) NULL,
-            `course_name`        VARCHAR(255) NOT NULL,
-            `num_holes`          INT NOT NULL DEFAULT 18,
-            `game_type`          ENUM('training','stroke_play','stableford','match_play') NOT NULL DEFAULT 'training',
-            `distance_km`        DECIMAL(7,2) NULL,
-            `calories_burned`    INT NULL,
-            `weather`            VARCHAR(120) NULL,
-            `players`            VARCHAR(255) NULL,
-            `handicap_before`    DECIMAL(5,1) NULL,
-            `handicap_after`     DECIMAL(5,1) NULL,
-            `count_for_handicap` TINYINT(1) NOT NULL DEFAULT 1,
-            `course_rating`      DECIMAL(4,1) NULL,
-            `slope_rating`       SMALLINT NULL,
-            `score_total`        INT NULL,
-            `score_differential` DECIMAL(5,1) NULL,
-            `duration_minutes`   INT NULL,
-            `feeling`            TEXT NULL,
-            `started_at`         DATETIME NULL,
-            `ended_at`           DATETIME NULL,
-            `created_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            `updated_at`         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY `uq_golf_session_training` (`session_id`),
-            KEY `idx_golf_sessions_course` (`course_id`),
-            KEY `idx_golf_sessions_tee` (`tee_id`),
-            CONSTRAINT `fk_golf_session_training`
-                FOREIGN KEY (`session_id`) REFERENCES `training_sessions`(`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $pdo->exec(" 
-        CREATE TABLE IF NOT EXISTS `golf_holes` (
-            `id`              INT AUTO_INCREMENT PRIMARY KEY,
-            `golf_session_id` INT NOT NULL,
-            `hole_number`     TINYINT NOT NULL,
-            `par`             TINYINT NOT NULL,
-            `score`           TINYINT NULL,
-            `notes`           TEXT NULL,
-            UNIQUE KEY `uq_golf_hole` (`golf_session_id`, `hole_number`),
-            KEY `idx_golf_holes_session` (`golf_session_id`),
-            CONSTRAINT `fk_golf_holes_session`
-                FOREIGN KEY (`golf_session_id`) REFERENCES `golf_sessions`(`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
@@ -356,20 +198,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
         $pdo->exec('UPDATE training_venues SET note = admin_note WHERE note IS NULL AND admin_note IS NOT NULL');
     }
 
-    // Backfill katalogu sportovist z historickych treningu
-    $pdo->exec(" 
-        INSERT IGNORE INTO `training_venues` (`name`, `is_active`)
-        SELECT DISTINCT TRIM(`location`) AS `name`, 1
-        FROM `training_sessions`
-        WHERE `location` IS NOT NULL AND TRIM(`location`) <> ''
-    ");
-    $pdo->exec(" 
-        INSERT IGNORE INTO `training_venues` (`name`, `is_active`)
-        SELECT DISTINCT TRIM(`location`) AS `name`, 1
-        FROM `run_treadmill_sessions`
-        WHERE `location` IS NOT NULL AND TRIM(`location`) <> ''
-    ");
-
     // Soft-delete tréninku trenérem (pro admin obnovu)
     $stmtTsDeleted = $pdo->query("SHOW COLUMNS FROM training_sessions LIKE 'deleted_by_coach_at'");
     if (!$stmtTsDeleted->fetch()) {
@@ -390,7 +218,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
             `exercise_id`    INT NOT NULL,
             `exercise_order` INT NOT NULL,
             `exercise_name`  VARCHAR(200) NOT NULL,
-            `sport_type`     ENUM('standard','golf','run_outdoor','run_treadmill') NOT NULL DEFAULT 'standard',
             UNIQUE KEY `uniq_session_exercise` (`session_id`, `exercise_id`),
             KEY `idx_session_order` (`session_id`, `exercise_order`),
             CONSTRAINT `fk_tse_session`
@@ -399,12 +226,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
                 FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON DELETE RESTRICT
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
-
-    // Typ sportu ve snapshotu cviku (starsi DB sloupec nema)
-    $stmtTseSportType = $pdo->query("SHOW COLUMNS FROM training_session_exercises LIKE 'sport_type'");
-    if (!$stmtTseSportType->fetch()) {
-        $pdo->exec("ALTER TABLE training_session_exercises ADD COLUMN sport_type ENUM('standard','golf','run_outdoor','run_treadmill') NOT NULL DEFAULT 'standard' AFTER exercise_name");
-    }
 
     $pdo->exec(" 
         CREATE TABLE IF NOT EXISTS `run_treadmill_splits` (
@@ -462,25 +283,6 @@ function ensureSchemaUpgrades(PDO $pdo): void {
     $stmtGlob = $pdo->query("SHOW COLUMNS FROM exercises LIKE 'is_global'");
     if (!$stmtGlob->fetch()) {
         $pdo->exec('ALTER TABLE exercises ADD COLUMN is_global TINYINT(1) NOT NULL DEFAULT 0');
-    }
-
-    // Vychozi globalni cviky pro specialni sporty
-    $specialGlobalExercises = [
-        ['name' => 'Golf', 'sport_type' => 'golf'],
-        ['name' => 'Beh venku', 'sport_type' => 'run_outdoor'],
-        ['name' => 'Beh na pase', 'sport_type' => 'run_treadmill'],
-    ];
-    $stmtSpecialExists = $pdo->prepare(
-        'SELECT COUNT(*) FROM exercises WHERE is_global = 1 AND sport_type = ?'
-    );
-    $stmtSpecialInsert = $pdo->prepare(
-        'INSERT INTO exercises (coach_id, name, photo, sport_type, is_global) VALUES (NULL, ?, NULL, ?, 1)'
-    );
-    foreach ($specialGlobalExercises as $specialExercise) {
-        $stmtSpecialExists->execute([$specialExercise['sport_type']]);
-        if ((int)$stmtSpecialExists->fetchColumn() === 0) {
-            $stmtSpecialInsert->execute([$specialExercise['name'], $specialExercise['sport_type']]);
-        }
     }
 
     // Hlaska po prihlaseni (admin edituje zpravy pro trenery)
