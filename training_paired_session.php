@@ -409,10 +409,11 @@ async function addPairedSeries(sessionId, exerciseId) {
         const data = await resp.json();
 
         if (data.success) {
+            const seriesOrder = parseInt(data.series_order, 10) || (rowCount + 1);
             const tr = document.createElement('tr');
             tr.id = 'series-row-' + key + '-' + data.id;
             tr.innerHTML = `
-                <td class="fw-bold text-muted">${rowCount + 1}</td>
+                <td class="fw-bold text-muted">${seriesOrder}</td>
                 <td class="fw-bold">${weight > 0 ? weight.toFixed(1).replace('.', ',') : '–'}</td>
                 <td>${reps || '–'}</td>
                 <td>${assist > 0 ? '<span class="badge bg-warning text-dark">' + assist + '</span>' : '–'}</td>
